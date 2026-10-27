@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../TrailHub.Weather.Infrastructure/TrailHub.Weather.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/TrailHub.BuildingBlocks.Web/TrailHub.BuildingBlocks.Web.csproj" />
+  </ItemGroup>
+</Project>

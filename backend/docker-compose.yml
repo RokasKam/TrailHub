@@ -1,0 +1,141 @@
+name: trailhub
+# Full TrailHub backend:  cp .env.example .env  &&  docker compose up --build
+# Gateway (the only URL the app needs): http://localhost:8080
+# Infra is exposed on non-default host ports (55432, 56379, 55672, UI 55673) to avoid clashing with other local stacks.
+
+x-service: &service
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+
+x-service-env: &service-env
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+  Auth__Mode: ${AUTH_MODE:-Auth0}
+  Auth0__Domain: ${AUTH0_DOMAIN:-}
+  Auth0__Audience: ${AUTH0_AUDIENCE:-}
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Username: ${RABBITMQ_USER:-trailhub}
+  RabbitMq__Password: ${RABBITMQ_PASSWORD:-trailhub}
+  ConnectionStrings__Redis: redis:6379
+  Database__MigrateOnStartup: "true"
+
+services:
+  postgres:
+    build: ./infra/postgres
+    image: trailhub/postgres-postgis:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trailhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trailhub}
+      POSTGRES_DB: trailhub
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["${POSTGRES_HOST_PORT:-55432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d trailhub"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["${REDIS_HOST_PORT:-56379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-trailhub}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-trailhub}
+    ports: ["${RABBITMQ_HOST_PORT:-55672}:5672", "${RABBITMQ_UI_HOST_PORT:-55673}:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 20
+
+  # S3-compatible photo storage for local development (MinIO no longer publishes images).
+  # Dev-only credentials live in infra/seaweedfs/s3.json; in production point Photos__* at AWS S3,
+  # Cloudflare R2 or similar, and put a CDN in front.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.05
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json", "-master.volumeSizeLimitMB=1024"]
+    volumes:
+      - photo-data:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    ports: ["${PHOTO_STORE_HOST_PORT:-58333}:8333"]
+
+  profile-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Profile/TrailHub.Profile.Api, APP_DLL: TrailHub.Profile.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__ProfileDb: Host=postgres;Database=trailhub_profile;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+
+  trails-api:
+    <<: *service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      seaweedfs: { condition: service_started }
+    build: { context: ., args: { PROJECT: src/Services/Trails/TrailHub.Trails.Api, APP_DLL: TrailHub.Trails.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__TrailsDb: Host=postgres;Database=trailhub_trails;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+      Photos__ServiceUrl: http://seaweedfs:8333
+      Photos__Bucket: trailhub-photos
+      Photos__AccessKey: trailhub
+      Photos__SecretKey: trailhub-photos-dev-secret
+      Photos__CreateBucket: "true"
+      Photos__PublicBaseUrl: ${PHOTOS_PUBLIC_BASE_URL:-http://localhost:8080/photos}
+
+  activity-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Activity/TrailHub.Activity.Api, APP_DLL: TrailHub.Activity.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__ActivityDb: Host=postgres;Database=trailhub_activity;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+
+  trips-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Trips/TrailHub.Trips.Api, APP_DLL: TrailHub.Trips.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__TripsDb: Host=postgres;Database=trailhub_trips;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+
+  groups-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Groups/TrailHub.Groups.Api, APP_DLL: TrailHub.Groups.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__GroupsDb: Host=postgres;Database=trailhub_groups;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+
+  weather-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Weather/TrailHub.Weather.Api, APP_DLL: TrailHub.Weather.Api.dll } }
+    environment:
+      <<: *service-env
+
+  gateway:
+    build: { context: ., args: { PROJECT: src/Gateway/TrailHub.Gateway, APP_DLL: TrailHub.Gateway.dll } }
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    depends_on: [profile-api, trails-api, activity-api, trips-api, groups-api, weather-api]
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ReverseProxy__Clusters__profile__Destinations__d1__Address: http://profile-api:8080
+      ReverseProxy__Clusters__trails__Destinations__d1__Address: http://trails-api:8080
+      ReverseProxy__Clusters__activity__Destinations__d1__Address: http://activity-api:8080
+      ReverseProxy__Clusters__trips__Destinations__d1__Address: http://trips-api:8080
+      ReverseProxy__Clusters__groups__Destinations__d1__Address: http://groups-api:8080
+      ReverseProxy__Clusters__weather__Destinations__d1__Address: http://weather-api:8080
+      ReverseProxy__Clusters__photos__Destinations__d1__Address: http://seaweedfs:8333
+
+volumes:
+  postgres-data:
+  photo-data:

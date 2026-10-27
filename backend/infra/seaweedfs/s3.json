@@ -1,0 +1,13 @@
+{
+  "identities": [
+    {
+      "name": "trailhub",
+      "credentials": [{ "accessKey": "trailhub", "secretKey": "trailhub-photos-dev-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:trailhub-photos"]
+    }
+  ]
+}

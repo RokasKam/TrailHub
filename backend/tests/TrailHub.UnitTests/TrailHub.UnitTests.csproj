@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Services/Profile/TrailHub.Profile.Domain/TrailHub.Profile.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Trails/TrailHub.Trails.Domain/TrailHub.Trails.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Activity/TrailHub.Activity.Domain/TrailHub.Activity.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Trips/TrailHub.Trips.Domain/TrailHub.Trips.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Groups/TrailHub.Groups.Domain/TrailHub.Groups.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Weather/TrailHub.Weather.Domain/TrailHub.Weather.Domain.csproj" />
+    <ProjectReference Include="../../src/BuildingBlocks/TrailHub.BuildingBlocks.Infrastructure/TrailHub.BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

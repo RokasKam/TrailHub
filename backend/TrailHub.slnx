@@ -1,0 +1,54 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/TrailHub.BuildingBlocks.Application/TrailHub.BuildingBlocks.Application.csproj" />
+    <Project Path="src/BuildingBlocks/TrailHub.BuildingBlocks.Domain/TrailHub.BuildingBlocks.Domain.csproj" />
+    <Project Path="src/BuildingBlocks/TrailHub.BuildingBlocks.Infrastructure/TrailHub.BuildingBlocks.Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks/TrailHub.BuildingBlocks.Web/TrailHub.BuildingBlocks.Web.csproj" />
+    <Project Path="src/BuildingBlocks/TrailHub.Contracts/TrailHub.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/TrailHub.Gateway/TrailHub.Gateway.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Activity/">
+    <Project Path="src/Services/Activity/TrailHub.Activity.Api/TrailHub.Activity.Api.csproj" />
+    <Project Path="src/Services/Activity/TrailHub.Activity.Application/TrailHub.Activity.Application.csproj" />
+    <Project Path="src/Services/Activity/TrailHub.Activity.Domain/TrailHub.Activity.Domain.csproj" />
+    <Project Path="src/Services/Activity/TrailHub.Activity.Infrastructure/TrailHub.Activity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Groups/">
+    <Project Path="src/Services/Groups/TrailHub.Groups.Api/TrailHub.Groups.Api.csproj" />
+    <Project Path="src/Services/Groups/TrailHub.Groups.Application/TrailHub.Groups.Application.csproj" />
+    <Project Path="src/Services/Groups/TrailHub.Groups.Domain/TrailHub.Groups.Domain.csproj" />
+    <Project Path="src/Services/Groups/TrailHub.Groups.Infrastructure/TrailHub.Groups.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Profile/">
+    <Project Path="src/Services/Profile/TrailHub.Profile.Api/TrailHub.Profile.Api.csproj" />
+    <Project Path="src/Services/Profile/TrailHub.Profile.Application/TrailHub.Profile.Application.csproj" />
+    <Project Path="src/Services/Profile/TrailHub.Profile.Domain/TrailHub.Profile.Domain.csproj" />
+    <Project Path="src/Services/Profile/TrailHub.Profile.Infrastructure/TrailHub.Profile.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Trails/">
+    <Project Path="src/Services/Trails/TrailHub.Trails.Api/TrailHub.Trails.Api.csproj" />
+    <Project Path="src/Services/Trails/TrailHub.Trails.Application/TrailHub.Trails.Application.csproj" />
+    <Project Path="src/Services/Trails/TrailHub.Trails.Domain/TrailHub.Trails.Domain.csproj" />
+    <Project Path="src/Services/Trails/TrailHub.Trails.Infrastructure/TrailHub.Trails.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Trips/">
+    <Project Path="src/Services/Trips/TrailHub.Trips.Api/TrailHub.Trips.Api.csproj" />
+    <Project Path="src/Services/Trips/TrailHub.Trips.Application/TrailHub.Trips.Application.csproj" />
+    <Project Path="src/Services/Trips/TrailHub.Trips.Domain/TrailHub.Trips.Domain.csproj" />
+    <Project Path="src/Services/Trips/TrailHub.Trips.Infrastructure/TrailHub.Trips.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Weather/">
+    <Project Path="src/Services/Weather/TrailHub.Weather.Api/TrailHub.Weather.Api.csproj" />
+    <Project Path="src/Services/Weather/TrailHub.Weather.Application/TrailHub.Weather.Application.csproj" />
+    <Project Path="src/Services/Weather/TrailHub.Weather.Domain/TrailHub.Weather.Domain.csproj" />
+    <Project Path="src/Services/Weather/TrailHub.Weather.Infrastructure/TrailHub.Weather.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TrailHub.ArchitectureTests/TrailHub.ArchitectureTests.csproj" />
+    <Project Path="tests/TrailHub.UnitTests/TrailHub.UnitTests.csproj" />
+  </Folder>
+</Solution>
