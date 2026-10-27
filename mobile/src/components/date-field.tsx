@@ -73,5 +73,5 @@ export function toDateOnly(date: Date) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
   label: { flex: 1 },
-  androidField: { borderRadius: Spacing.three, padding: Spacing.three },
+  androidField: { borderRadius: 16, padding: Spacing.three },
 });

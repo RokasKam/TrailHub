@@ -5,7 +5,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-nat
 import { useUploadTrailPhoto } from '@/api/trails';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Section } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { formatDate } from '@/lib/format';
 import { choosePhotoSource } from '@/lib/photos';
 import type { TrailDetails } from '@/lib/types';
@@ -24,7 +24,12 @@ export function PhotoGallery({ trailId, photos }: { trailId: string; photos: Pho
   };
 
   return (
-    <Section title={`Photos${photos.length ? ` · ${photos.length}` : ''}`}>
+    <Section title="Photos" action={<Button size="small" variant="tinted" icon="camera.fill" label={upload.isPending ? 'Uploading…' : 'Add'} onPress={addPhoto} loading={upload.isPending} />}>
+      {photos.length === 0 && (
+        <ThemedText type="small" themeColor="textSecondary">
+          No photos yet. Be the first to share the view.
+        </ThemedText>
+      )}
       {photos.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
           {[...photos].reverse().map((p) => (
@@ -34,7 +39,6 @@ export function PhotoGallery({ trailId, photos }: { trailId: string; photos: Pho
           ))}
         </ScrollView>
       )}
-      <Button label={upload.isPending ? 'Uploading…' : 'Add photo'} variant="secondary" onPress={addPhoto} loading={upload.isPending} />
 
       <Modal visible={!!open} animationType="fade" onRequestClose={() => setOpen(null)} presentationStyle="fullScreen">
         <Pressable style={styles.viewer} onPress={() => setOpen(null)}>
@@ -53,7 +57,7 @@ export function PhotoGallery({ trailId, photos }: { trailId: string; photos: Pho
 
 const styles = StyleSheet.create({
   strip: { gap: Spacing.two },
-  thumb: { width: 160, height: 120, borderRadius: Spacing.two, backgroundColor: '#ddd' },
+  thumb: { width: 200, height: 150, borderRadius: Radius.medium, borderCurve: 'continuous', backgroundColor: '#ddd' },
   viewer: { flex: 1, backgroundColor: '#000' },
   caption: { position: 'absolute', bottom: Spacing.six, left: 0, right: 0, alignItems: 'center' },
   captionText: { color: '#fff' },

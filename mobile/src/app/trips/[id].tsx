@@ -7,7 +7,7 @@ import { useTrail } from '@/api/trails';
 import { DateField, toDateOnly } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { TrailPicker } from '@/components/trail-picker';
-import { Button, Card, Input, QueryState, Screen, Section } from '@/components/ui';
+import { Button, Card, Icon, Input, List, QueryState, Screen, Section } from '@/components/ui';
 import { WeatherCard } from '@/components/weather-card';
 import { Spacing } from '@/constants/theme';
 import { formatDate } from '@/lib/format';
@@ -36,7 +36,8 @@ export default function TripScreen() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: t.name }} />
+      <Stack.Screen options={{ title: '' }} />
+      <ThemedText type="subtitle">{t.name}</ThemedText>
       {editable ? (
         <Card>
           <DateField
@@ -69,7 +70,7 @@ export default function TripScreen() {
         <Section
           key={day.dayNumber}
           title={`Day ${day.dayNumber} · ${formatDate(day.date)}`}
-          action={editable && editingDay !== day.dayNumber ? <Button label="Edit" variant="secondary" onPress={() => setEditingDay(day.dayNumber)} /> : undefined}>
+          action={editable && editingDay !== day.dayNumber ? <Button size="small" icon="pencil" label="Edit" variant="secondary" onPress={() => setEditingDay(day.dayNumber)} /> : undefined}>
           {day.trailIds.map((trailId) => (
             <DayTrail
               key={trailId}
@@ -89,23 +90,34 @@ export default function TripScreen() {
             />
           ) : (
             <>
-              {day.overnight && <ThemedText type="small">🛏 {day.overnight}</ThemedText>}
+              {day.overnight && (
+                <View style={styles.inline}>
+                  <Icon name="bed.double.fill" size={14} color="#7C3AED" />
+                  <ThemedText type="small">{day.overnight}</ThemedText>
+                </View>
+              )}
               {day.notes && <ThemedText type="small" themeColor="textSecondary">{day.notes}</ThemedText>}
             </>
           )}
-          {editable && <Button label="Add trail" variant="secondary" onPress={() => setPickingFor(day.dayNumber)} />}
+          {editable && <Button icon="plus" label="Add trail" variant="tinted" onPress={() => setPickingFor(day.dayNumber)} />}
         </Section>
       ))}
 
       <Section title="Checklist">
-        {t.checklist.map((c) => (
-          <Pressable key={c.id} onPress={() => change.mutate({ kind: 'toggleItem', itemId: c.id, isDone: !c.isDone })} onLongPress={() => change.mutate({ kind: 'removeItem', itemId: c.id })}>
-            <ThemedText style={c.isDone && styles.done}>
-              {c.isDone ? '☑' : '☐'} {c.text}
-            </ThemedText>
-          </Pressable>
-        ))}
+        {t.checklist.length > 0 && (
+          <List>
+            {t.checklist.map((c) => (
+              <Pressable key={c.id} onPress={() => change.mutate({ kind: 'toggleItem', itemId: c.id, isDone: !c.isDone })} onLongPress={() => change.mutate({ kind: 'removeItem', itemId: c.id })}>
+                <View style={styles.checkItem}>
+                  <Icon name={c.isDone ? 'checkmark.circle.fill' : 'circle'} size={22} color={c.isDone ? '#16A34A' : '#A8A29E'} weight="regular" />
+                  <ThemedText style={[{ flex: 1 }, c.isDone && styles.done]}>{c.text}</ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </List>
+        )}
         <Input
+          icon="plus.circle"
           placeholder="Add item (long-press an item to remove it)"
           value={item}
           onChangeText={setItem}
@@ -162,17 +174,19 @@ function DayTrail({ trailId, date, onRemove }: { trailId: string; date: string; 
   return (
     <Card>
       <Link href={`/trail/${trailId}`}>
-        <ThemedText type="smallBold">{trail.data?.name ?? 'Loading trail…'}</ThemedText>
+        <ThemedText type="headline">{trail.data?.name ?? 'Loading trail…'}</ThemedText>
       </Link>
       {trail.data && inRange && (
         <WeatherCard latitude={trail.data.start.latitude} longitude={trail.data.start.longitude} elevation={trail.data.maxElevationMeters} from={date} to={date} days={1} />
       )}
-      {onRemove && <Button label="Remove" variant="secondary" onPress={onRemove} />}
+      {onRemove && <Button size="small" icon="minus.circle" label="Remove" variant="secondary" onPress={onRemove} />}
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: Spacing.two },
-  done: { textDecorationLine: 'line-through', opacity: 0.6 },
+  done: { textDecorationLine: 'line-through', opacity: 0.5 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  checkItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three - 4, minHeight: 44 },
 });

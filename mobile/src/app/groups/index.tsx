@@ -1,11 +1,10 @@
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable } from 'react-native';
 
 import { useCreateGroup, useGroups, useJoinGroup } from '@/api/planning';
 import { useProfile } from '@/api/profile';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Input, QueryState, Screen, Section } from '@/components/ui';
+import { Button, Card, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 
 export default function GroupsScreen() {
@@ -20,7 +19,7 @@ export default function GroupsScreen() {
     <Screen>
       <Section title="Join with an invite code">
         <Card>
-          <Input placeholder="8-character code" value={code} onChangeText={setCode} autoCapitalize="characters" maxLength={8} />
+          <Input icon="ticket" placeholder="8-character code" value={code} onChangeText={setCode} autoCapitalize="characters" maxLength={8} />
           {join.error && <ThemedText type="small">{join.error.message}</ThemedText>}
           <Button
             label="Join group"
@@ -33,7 +32,7 @@ export default function GroupsScreen() {
 
       <Section title="Start a group">
         <Card>
-          <Input placeholder="Group name" value={name} onChangeText={setName} />
+          <Input icon="person.3" placeholder="Group name" value={name} onChangeText={setName} />
           <Button
             label="Create group"
             disabled={!name.trim()}
@@ -44,20 +43,21 @@ export default function GroupsScreen() {
       </Section>
 
       <Section title="Your groups">
-        <QueryState isLoading={groups.isLoading} error={groups.error} hasData={!!groups.data?.length} empty={groups.data?.length === 0} emptyText="You're not in any groups yet." />
-        {groups.data?.map((g) => (
-          <Link key={g.id} href={`/groups/${g.id}`} asChild>
-            <Pressable>
-              <Card>
-                <ThemedText type="smallBold">{g.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {g.memberCount} member{g.memberCount > 1 ? 's' : ''} · {g.myRole}
-                  {g.nextHikeAtUtc && ` · next hike ${formatDate(g.nextHikeAtUtc)}`}
-                </ThemedText>
-              </Card>
-            </Pressable>
-          </Link>
-        ))}
+        <QueryState isLoading={groups.isLoading} error={groups.error} hasData={!!groups.data?.length} empty={groups.data?.length === 0} emptyText="You're not in any groups yet." emptyIcon="person.3" />
+        {!!groups.data?.length && (
+          <List>
+            {groups.data.map((g) => (
+              <ListRow
+                key={g.id}
+                icon="person.3.fill"
+                iconColor="#2563EB"
+                title={g.name}
+                detail={`${g.memberCount} member${g.memberCount > 1 ? 's' : ''} · ${g.myRole}${g.nextHikeAtUtc ? ` · next hike ${formatDate(g.nextHikeAtUtc)}` : ''}`}
+                onPress={() => router.push(`/groups/${g.id}`)}
+              />
+            ))}
+          </List>
+        )}
       </Section>
     </Screen>
   );

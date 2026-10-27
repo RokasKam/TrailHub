@@ -10,8 +10,9 @@ import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { TrailMap } from '@/components/trail-map';
 import { TrailPicker } from '@/components/trail-picker';
-import { Accent, Button, Card, Chip, Input, QueryState, Screen, Section } from '@/components/ui';
+import { Accent, Badge, Button, Card, Chip, Icon, IconButton, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import type { GroupHike, RsvpStatus, TrailSummary } from '@/lib/types';
 import { startGroupSharing, stopGroupSharing, useGroupSharingStore } from '@/location/group-sharing';
 
@@ -56,9 +57,12 @@ export default function GroupScreen() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: g.name }} />
+      <Stack.Screen options={{ title: '' }} />
+      <ThemedText type="subtitle">{g.name}</ThemedText>
 
-      <Section title={`Live map · ${live.state}`}>
+      <Section
+        title="Live map"
+        action={<Badge label={live.state === 'Connected' ? 'Live' : live.state} color={live.state === 'Connected' ? '#16A34A' : '#9CA3AF'} icon="dot.radiowaves.left.and.right" />}>
         <TrailMap
           showUser
           center={others[0] ?? meetingPins[0]}
@@ -72,21 +76,35 @@ export default function GroupScreen() {
           {others.length === 0 ? 'Nobody else is sharing right now.' : `${others.length} member${others.length > 1 ? 's' : ''} sharing`}
           {sharing ? ' · You are sharing (also in the background)' : ''}
         </ThemedText>
-        <Button label={sharing ? 'Stop sharing my location' : 'Share my location'} variant={sharing ? 'danger' : 'primary'} onPress={toggleSharing} loading={busy} />
+        <Button
+          icon={sharing ? 'location.slash.fill' : 'location.fill'}
+          label={sharing ? 'Stop sharing my location' : 'Share my location'}
+          variant={sharing ? 'danger' : 'primary'}
+          onPress={toggleSharing}
+          loading={busy}
+        />
       </Section>
 
       {g.inviteCode && (
-        <Card>
-          <ThemedText type="small">Invite code</ThemedText>
-          <ThemedText type="subtitle" selectable>
-            {g.inviteCode}
-          </ThemedText>
-          <Button label="Share invite" variant="secondary" onPress={() => Share.share({ message: `Join "${g.name}" on TrailHub with code ${g.inviteCode}` })} />
+        <Card style={styles.invite}>
+          <View style={{ flex: 1 }}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              INVITE CODE
+            </ThemedText>
+            <ThemedText type="number" style={styles.code} selectable>
+              {g.inviteCode}
+            </ThemedText>
+          </View>
+          <IconButton icon="square.and.arrow.up" label="Share invite" tinted onPress={() => Share.share({ message: `Join "${g.name}" on TrailHub with code ${g.inviteCode}` })} />
         </Card>
       )}
 
       <Section title="Upcoming hikes">
-        {g.upcomingHikes.length === 0 && <ThemedText type="small" themeColor="textSecondary">No hikes scheduled.</ThemedText>}
+        {g.upcomingHikes.length === 0 && (
+          <ThemedText type="small" themeColor="textSecondary">
+            No hikes scheduled yet.
+          </ThemedText>
+        )}
         {g.upcomingHikes.map((h) => (
           <HikeCard key={h.id} groupId={id} hike={h} names={names} myId={user?.id} />
         ))}
@@ -94,20 +112,28 @@ export default function GroupScreen() {
       </Section>
 
       <Section title={`Members · ${g.members.length}`}>
-        {g.members.map((m) => (
-          <View key={m.userId} style={styles.member}>
-            <ThemedText type="small">{m.displayName}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {m.role}
-            </ThemedText>
-          </View>
-        ))}
+        <List>
+          {g.members.map((m) => (
+            <ListRow
+              key={m.userId}
+              icon={m.role === 'Owner' ? 'crown.fill' : 'person.fill'}
+              iconColor={m.role === 'Owner' ? '#D97706' : '#64748B'}
+              title={m.displayName}
+              trailing={
+                <ThemedText type="small" themeColor="textSecondary">
+                  {m.role}
+                </ThemedText>
+              }
+            />
+          ))}
+        </List>
       </Section>
 
-      <Button
-        label="Leave group"
-        variant="danger"
-        onPress={() =>
+      <List>
+        <ListRow
+          title="Leave group"
+          destructive
+          onPress={() =>
           leave.mutate(undefined, {
             onSuccess: () => {
               void stopGroupSharing(id);
@@ -115,9 +141,25 @@ export default function GroupScreen() {
             },
             onError: (e) => Alert.alert("Can't leave", e.message),
           })
-        }
-      />
+          }
+        />
+      </List>
     </Screen>
+  );
+}
+
+/** Calendar-style date tile, like Calendar and Reminders use for events. */
+function DateTile({ date }: { date: Date }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.tile, { backgroundColor: theme.backgroundSelected }]}>
+      <View style={{ backgroundColor: '#E11D48', alignSelf: 'stretch', alignItems: 'center', paddingVertical: 2 }}>
+        <ThemedText style={styles.tileMonth}>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</ThemedText>
+      </View>
+      <ThemedText type="number" style={{ flex: 1, textAlignVertical: 'center', lineHeight: 34 }}>
+        {date.getDate()}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -129,16 +171,24 @@ function HikeCard({ groupId, hike, names, myId }: { groupId: string; hike: Group
 
   return (
     <Card>
-      <ThemedText type="smallBold">{hike.title}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {new Date(hike.scheduledAtUtc).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-        {hike.meetingLatitude != null && ' · meeting point on the map'}
-      </ThemedText>
+      <View style={styles.hikeHeader}>
+        <DateTile date={new Date(hike.scheduledAtUtc)} />
+        <View style={{ flex: 1 }}>
+          <ThemedText type="headline">{hike.title}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {new Date(hike.scheduledAtUtc).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}
+            {hike.meetingLatitude != null && ' · meeting point set'}
+          </ThemedText>
+        </View>
+      </View>
       {hike.notes && <ThemedText type="small">{hike.notes}</ThemedText>}
-      <ThemedText type="small">
-        ✅ {going.length ? going.join(', ') : 'Nobody yet'}
-        {maybe > 0 && ` · ${maybe} maybe`}
-      </ThemedText>
+      <View style={styles.going}>
+        <Icon name="person.2.fill" size={14} color="#16A34A" />
+        <ThemedText type="small" style={{ flex: 1 }}>
+          {going.length ? going.join(', ') : 'Nobody going yet'}
+          {maybe > 0 && ` · ${maybe} maybe`}
+        </ThemedText>
+      </View>
       <View style={styles.row}>
         {(Object.keys(RSVP_LABELS) as RsvpStatus[]).map((status) => (
           <Chip
@@ -149,7 +199,7 @@ function HikeCard({ groupId, hike, names, myId }: { groupId: string; hike: Group
           />
         ))}
       </View>
-      {hike.trailId && <Button label="View trail" variant="secondary" onPress={() => router.push(`/trail/${hike.trailId}`)} />}
+      {hike.trailId && <Button size="small" icon="map" label="View trail" variant="tinted" onPress={() => router.push(`/trail/${hike.trailId}`)} />}
     </Card>
   );
 }
@@ -179,14 +229,14 @@ function ScheduleHikeForm({ groupId }: { groupId: string }) {
 
   return (
     <Card>
-      <ThemedText type="smallBold">Schedule a hike</ThemedText>
-      <Input placeholder="Title, e.g. Sunrise on the ridge" value={title} onChangeText={setTitle} />
+      <ThemedText type="headline">Schedule a hike</ThemedText>
+      <Input icon="calendar.badge.plus" placeholder="Title, e.g. Sunrise on the ridge" value={title} onChangeText={setTitle} />
       <DateField label="When" mode="datetime" value={when} onChange={setWhen} minimumDate={now} />
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <Button label={trail ? trail.name : 'Choose trail (optional)'} variant="secondary" onPress={() => setPicking(true)} />
+          <Button icon="mountain.2" label={trail ? trail.name : 'Choose trail (optional)'} variant="secondary" onPress={() => setPicking(true)} />
         </View>
-        {trail && <Button label="✕" variant="secondary" onPress={() => { setTrail(null); setMeeting(null); }} />}
+        {trail && <IconButton icon="xmark" label="Clear trail" onPress={() => { setTrail(null); setMeeting(null); }} />}
       </View>
       {(trail || meeting) && (
         <>
@@ -205,6 +255,7 @@ function ScheduleHikeForm({ groupId }: { groupId: string }) {
       <Input placeholder="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
       {schedule.error && <ThemedText type="small">{schedule.error.message}</ThemedText>}
       <Button
+        icon="calendar.badge.plus"
         label="Schedule hike"
         disabled={!title.trim() || when <= now}
         loading={schedule.isPending}
@@ -237,6 +288,11 @@ function ScheduleHikeForm({ groupId }: { groupId: string }) {
 }
 
 const styles = StyleSheet.create({
-  member: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.one },
+  invite: { flexDirection: 'row', alignItems: 'center' },
+  code: { fontSize: 28, lineHeight: 34, letterSpacing: 2 },
+  hikeHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  going: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tile: { width: 52, height: 56, borderRadius: 14, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  tileMonth: { color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, alignItems: 'center' },
 });

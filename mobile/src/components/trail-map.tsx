@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { useProfile } from '@/api/profile';
 import { Accent } from '@/components/ui';
 import { config } from '@/config';
-import { Spacing } from '@/constants/theme';
+import { Radius } from '@/constants/theme';
 import { toCameraBounds } from '@/lib/geo';
 import type { Bounds, MapStyle, PointOfInterestType } from '@/lib/types';
 
@@ -169,5 +169,5 @@ export async function downloadOfflineRegion(name: string, bounds: Bounds, styleU
 }
 
 const styles = StyleSheet.create({
-  container: { borderRadius: Spacing.three, overflow: 'hidden' },
+  container: { borderRadius: Radius.large, borderCurve: 'continuous', overflow: 'hidden' },
 });

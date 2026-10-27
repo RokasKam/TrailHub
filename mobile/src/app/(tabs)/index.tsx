@@ -8,7 +8,7 @@ import { type TrailFilters, useFavoriteTrails, useImportTrailGpx, useTrailSearch
 import { ThemedText } from '@/components/themed-text';
 import { TrailCard } from '@/components/trail-card';
 import { TrailMap } from '@/components/trail-map';
-import { Button, Card, Chip, Input, QueryState, Screen, Section } from '@/components/ui';
+import { Button, Card, Chip, IconButton, Input, PageHeader, QueryState, Screen, Section, Segmented } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { pickGpxFile, type PickedFile } from '@/lib/pick-gpx';
 import type { Difficulty } from '@/lib/types';
@@ -24,6 +24,11 @@ const DURATIONS = [
   { label: '< 4 h', max: 240 },
   { label: 'Full day', max: undefined },
 ] as const;
+
+function greeting() {
+  const hour = new Date().getHours();
+  return hour < 5 ? 'Night owl hike?' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
 
 function useDebounced<T>(value: T, ms = 350) {
   const [debounced, setDebounced] = useState(value);
@@ -76,37 +81,41 @@ export default function DiscoverScreen() {
   };
 
   const trails = search.data?.items ?? [];
+  const [importing, setImporting] = useState<PickedFile | null>(null);
+  const pickImport = async () => {
+    const picked = await pickGpxFile();
+    if (picked) setImporting(picked);
+  };
 
   return (
     <Screen tabBar>
-      <View style={styles.titleRow}>
-        <ThemedText type="subtitle">Discover</ThemedText>
-        <ImportTrailButton />
-      </View>
+      <PageHeader eyebrow={greeting()} title="Discover" action={<IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickImport} />} />
+      {importing && <ImportTrailCard file={importing} onDone={() => setImporting(null)} />}
 
-      <Input placeholder="Search trails or regions" value={query} onChangeText={setQuery} returnKeyType="search" clearButtonMode="while-editing" />
+      <Input icon="magnifyingglass" placeholder="Trails, peaks or regions" value={query} onChangeText={setQuery} returnKeyType="search" clearButtonMode="while-editing" />
 
       {/* flexGrow 0: the page content flex-grows, and a horizontal ScrollView would otherwise take the spare height */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.chips}>
-        <Chip label="📍 Near me" selected={!!near} onPress={toggleNearMe} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={[styles.chips, { paddingHorizontal: 18 }]}>
+        <Chip label="Near me" icon="location.fill" selected={!!near} onPress={toggleNearMe} />
         {DIFFICULTIES.map((d) => (
           <Chip key={d} label={d} selected={difficulty.includes(d)} onPress={() => setDifficulty((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]))} />
         ))}
         {LENGTHS.map((l, i) => (
-          <Chip key={l.label} label={l.label} selected={length === i} onPress={() => setLength(length === i ? null : i)} />
+          <Chip key={l.label} icon={i === 0 ? 'ruler' : undefined} label={l.label} selected={length === i} onPress={() => setLength(length === i ? null : i)} />
         ))}
         {DURATIONS.slice(0, 2).map((d, i) => (
-          <Chip key={d.label} label={d.label} selected={duration === i} onPress={() => setDuration(duration === i ? null : i)} />
+          <Chip key={d.label} icon={i === 0 ? 'clock' : undefined} label={d.label} selected={duration === i} onPress={() => setDuration(duration === i ? null : i)} />
         ))}
       </ScrollView>
 
-      <View style={styles.chips}>
-        <Chip label="List" selected={view === 'list'} onPress={() => setView('list')} />
-        <Chip label="Map" selected={view === 'map'} onPress={() => setView('map')} />
-        <ThemedText type="small" themeColor="textSecondary" style={styles.count}>
-          {search.data ? `${search.data.totalCount} trail${search.data.totalCount === 1 ? "" : "s"}` : ''}
-        </ThemedText>
-      </View>
+      <Segmented
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'list', label: 'List', icon: 'list.bullet' },
+          { value: 'map', label: 'Map', icon: 'map' },
+        ]}
+      />
 
       {view === 'map' ? (
         <TrailMap
@@ -120,19 +129,31 @@ export default function DiscoverScreen() {
       ) : (
         <>
           {!query && !near && !difficulty.length && (favorites.data?.length ?? 0) > 0 && (
-            <Section title="Favorites">
-              {favorites.data!.slice(0, 3).map((t) => (
-                <TrailCard key={t.id} trail={t} units={units} />
-              ))}
+            <Section title="Your favorites">
+              {/* Bleeds to the screen edges so cards scroll under the margin, like App Store shelves. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.shelf} contentContainerStyle={styles.shelfContent}>
+                {favorites.data!.map((t) => (
+                  <TrailCard key={t.id} trail={t} units={units} compact />
+                ))}
+              </ScrollView>
             </Section>
           )}
-          <Section title={near ? 'Nearby' : 'Trails'}>
+          <Section
+            title={near ? 'Nearby' : query ? 'Results' : 'All trails'}
+            action={
+              search.data && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {search.data.totalCount} trail{search.data.totalCount === 1 ? '' : 's'}
+                </ThemedText>
+              )
+            }>
             <QueryState
               isLoading={search.isLoading}
               error={search.error}
               hasData={trails.length > 0}
               empty={!search.isLoading && trails.length === 0}
               emptyText="No trails match. Try fewer filters, or import a GPX file."
+              emptyIcon="mountain.2"
               onRetry={() => void Promise.all([search.refetch(), favorites.refetch()])}
             />
             {trails.map((t) => (
@@ -145,54 +166,51 @@ export default function DiscoverScreen() {
   );
 }
 
-function ImportTrailButton() {
+function ImportTrailCard({ file, onDone }: { file: PickedFile; onDone: () => void }) {
   const importGpx = useImportTrailGpx();
-  const [file, setFile] = useState<PickedFile | null>(null);
   const [region, setRegion] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('Moderate');
 
-  const pick = async () => {
-    const picked = await pickGpxFile();
-    if (picked) setFile(picked);
-  };
-
-  // Takes the picked file as an argument (no `file!` here): React Compiler memoizes this
-  // handler and reads its dependencies during render, before any file has been picked.
-  const upload = (picked: PickedFile) =>
+  const upload = () =>
     importGpx.mutate(
-      { uri: picked.uri, fileName: picked.name, region, difficulty },
+      { uri: file.uri, fileName: file.name, region, difficulty },
       {
         onSuccess: ({ id }) => {
-          setFile(null);
+          onDone();
           router.push(`/trail/${id}`);
         },
         onError: (e) => Alert.alert('Import failed', e.message),
       },
     );
 
-  if (!file) return <Button label="Import GPX" variant="secondary" onPress={pick} />;
-
   return (
-    <Card style={styles.importCard}>
-      <ThemedText type="smallBold">{file.name}</ThemedText>
-      <Input placeholder="Region, e.g. High Tatras" value={region} onChangeText={setRegion} />
+    <Card>
+      <ThemedText type="headline">Import trail</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        {file.name}
+      </ThemedText>
+      <Input icon="mappin.and.ellipse" placeholder="Region, e.g. High Tatras" value={region} onChangeText={setRegion} />
       <View style={styles.chips}>
         {DIFFICULTIES.map((d) => (
           <Chip key={d} label={d} selected={difficulty === d} onPress={() => setDifficulty(d)} />
         ))}
       </View>
       <View style={styles.chips}>
-        <Button label="Cancel" variant="secondary" onPress={() => setFile(null)} />
-        <Button label="Import" onPress={() => upload(file)} disabled={!region.trim()} loading={importGpx.isPending} />
+        <View style={{ flex: 1 }}>
+          <Button label="Cancel" variant="secondary" onPress={onDone} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Import" icon="square.and.arrow.down" onPress={upload} disabled={!region.trim()} loading={importGpx.isPending} />
+        </View>
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.two },
   chips: { flexDirection: 'row', gap: Spacing.two, flexWrap: 'wrap', alignItems: 'center' },
-  chipScroller: { flexGrow: 0 },
-  count: { marginLeft: 'auto' },
-  importCard: { width: '100%' },
+  // flexGrow 0 + negative margins: full-bleed horizontal rows inside the padded page.
+  chipScroller: { flexGrow: 0, marginHorizontal: -18 },
+  shelf: { flexGrow: 0, marginHorizontal: -18, overflow: 'visible' },
+  shelfContent: { gap: Spacing.three, paddingHorizontal: 18, paddingBottom: Spacing.two },
 });

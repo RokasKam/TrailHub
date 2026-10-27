@@ -1,21 +1,23 @@
-import { Link } from 'expo-router';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import type { SFSymbol } from 'expo-symbols';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import { useActivities, useImportActivityGpx, useStatistics } from '@/api/activities';
 import { useUnits } from '@/api/profile';
 import { BarChart } from '@/components/charts';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
+import { Button, Card, Icon, IconButton, List, ListRow, PageHeader, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { formatDate, formatDistance, formatDuration, formatElevation } from '@/lib/format';
 import { pickGpxFile } from '@/lib/pick-gpx';
-import type { ActivityTotals, Units } from '@/lib/types';
 import { useSyncStore } from '@/stores/sync-store';
 
-const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function ActivitiesScreen() {
   const units = useUnits();
+  const theme = useTheme();
   const stats = useStatistics();
   const activities = useActivities();
   const importGpx = useImportActivityGpx();
@@ -30,23 +32,49 @@ export default function ActivitiesScreen() {
   const items = activities.data?.pages.flatMap((p) => p.items) ?? [];
   const months = stats.data?.lastTwelveMonths ?? [];
 
+  const year = stats.data?.thisYear;
+
   return (
     <Screen tabBar>
-      <View style={styles.titleRow}>
-        <ThemedText type="subtitle">Hikes</ThemedText>
-        <Button label="Import GPX" variant="secondary" onPress={pickGpx} loading={importGpx.isPending} />
-      </View>
+      <PageHeader
+        eyebrow={year ? `${year.hikes} hike${year.hikes === 1 ? '' : 's'} this year` : undefined}
+        title="Hikes"
+        action={<IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickGpx} />}
+      />
 
-      {stats.data && (
+      {stats.data && year && (
         <>
-          <Totals title="All time" totals={stats.data.allTime} units={units} />
-          <Totals title={`${new Date().getFullYear()}`} totals={stats.data.thisYear} units={units} />
-          <Section title="Distance per month">
+          <Card style={[styles.hero, { backgroundColor: theme.accent }]}>
+            <ThemedText type="caption" style={styles.heroLabel}>
+              {new Date().getFullYear()} DISTANCE
+            </ThemedText>
+            <ThemedText type="number" style={styles.heroNumber}>
+              {formatDistance(year.distanceMeters, units)}
+            </ThemedText>
+            <View style={styles.heroStats}>
+              <HeroStat icon="figure.hiking" value={String(year.hikes)} label={year.hikes === 1 ? 'hike' : 'hikes'} />
+              <HeroStat icon="arrow.up.forward" value={formatElevation(year.elevationGainMeters, units)} label="climbed" />
+              <HeroStat icon="clock" value={formatDuration(year.movingDurationSeconds)} label="moving" />
+            </View>
+          </Card>
+
+          <Section title="Last 12 months">
             <Card>
               <BarChart
                 values={months.map((m) => m.distanceMeters)}
-                labels={months.map((m) => `${MONTHS[m.month - 1]} ${String(m.year).slice(2)}`)}
+                labels={months.map((m) => `${MONTHS[m.month - 1]} ’${String(m.year).slice(2)}`)}
               />
+            </Card>
+          </Section>
+
+          <Section title="All time">
+            <Card>
+              <StatRow>
+                <Stat icon="figure.hiking" label="Hikes" value={String(stats.data.allTime.hikes)} />
+                <Stat icon="point.topleft.down.to.point.bottomright.curvepath" label="Distance" value={formatDistance(stats.data.allTime.distanceMeters, units)} />
+                <Stat icon="arrow.up.forward" label="Climbed" value={formatElevation(stats.data.allTime.elevationGainMeters, units)} />
+                <Stat icon="clock" label="Time" value={formatDuration(stats.data.allTime.movingDurationSeconds)} />
+              </StatRow>
             </Card>
           </Section>
         </>
@@ -54,9 +82,12 @@ export default function ActivitiesScreen() {
 
       <Section title="History">
         {pendingCount > 0 && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {pendingCount} hike{pendingCount > 1 ? 's' : ''} waiting to upload (see Record).
-          </ThemedText>
+          <View style={styles.pending}>
+            <Icon name="icloud.and.arrow.up" size={14} color={theme.textSecondary} />
+            <ThemedText type="small" themeColor="textSecondary">
+              {pendingCount} hike{pendingCount > 1 ? 's' : ''} waiting to upload (see Record)
+            </ThemedText>
+          </View>
         )}
         <QueryState
           isLoading={activities.isLoading}
@@ -64,42 +95,48 @@ export default function ActivitiesScreen() {
           hasData={items.length > 0}
           empty={!activities.isLoading && items.length === 0}
           emptyText="No hikes yet. Record one or import a GPX file."
+          emptyIcon="figure.hiking"
           onRetry={() => activities.refetch()}
         />
-        {items.map((a) => (
-          <Link key={a.id} href={`/activity/${a.id}`} asChild>
-            <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>
-              <Card>
-                <ThemedText type="smallBold">{a.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatDate(a.startedAtUtc)} · {formatDistance(a.distanceMeters, units)} · ↑ {formatElevation(a.elevationGainMeters, units)} ·{' '}
-                  {formatDuration(a.movingDurationSeconds)}
-                </ThemedText>
-              </Card>
-            </Pressable>
-          </Link>
-        ))}
+        {items.length > 0 && (
+          <List>
+            {items.map((a) => (
+              <ListRow
+                key={a.id}
+                icon={a.source === 'ImportedGpx' ? 'square.and.arrow.down.fill' : 'figure.hiking'}
+                iconColor={a.source === 'ImportedGpx' ? '#64748B' : theme.accent}
+                title={a.name}
+                detail={`${formatDate(a.startedAtUtc)} · ${formatDistance(a.distanceMeters, units)} · ↑ ${formatElevation(a.elevationGainMeters, units)} · ${formatDuration(a.movingDurationSeconds)}`}
+                onPress={() => router.push(`/activity/${a.id}`)}
+              />
+            ))}
+          </List>
+        )}
         {activities.hasNextPage && <Button label="Load more" variant="secondary" onPress={() => activities.fetchNextPage()} loading={activities.isFetchingNextPage} />}
       </Section>
     </Screen>
   );
 }
 
-function Totals({ title, totals, units }: { title: string; totals: ActivityTotals; units: Units }) {
+function HeroStat({ icon, value, label }: { icon: SFSymbol; value: string; label: string }) {
   return (
-    <Section title={title}>
-      <Card>
-        <StatRow>
-          <Stat label="Hikes" value={String(totals.hikes)} />
-          <Stat label="Distance" value={formatDistance(totals.distanceMeters, units)} />
-          <Stat label="Elevation" value={formatElevation(totals.elevationGainMeters, units)} />
-          <Stat label="Time" value={formatDuration(totals.movingDurationSeconds)} />
-        </StatRow>
-      </Card>
-    </Section>
+    <View style={styles.heroStat}>
+      <Icon name={icon} size={13} color="rgba(255,255,255,0.75)" />
+      <ThemedText type="smallBold" style={{ color: '#fff' }}>
+        {value}
+      </ThemedText>
+      <ThemedText type="small" style={{ color: 'rgba(255,255,255,0.75)' }}>
+        {label}
+      </ThemedText>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  hero: { gap: Spacing.one, padding: Spacing.four - 4 },
+  heroLabel: { color: 'rgba(255,255,255,0.75)', letterSpacing: 0.8 },
+  heroNumber: { color: '#fff', fontSize: 48, lineHeight: 56, fontWeight: 800, letterSpacing: -1 },
+  heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, marginTop: Spacing.one },
+  heroStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pending: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });
