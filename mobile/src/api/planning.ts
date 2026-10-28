@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import type { Forecast, Group, GroupHike, GroupSummary, LiveLocation, RsvpStatus, Trip, TripSummary } from '@/lib/types';
+import type { ChecklistItemKind, Forecast, Group, GroupHike, GroupSummary, LiveLocation, RsvpStatus, Trip, TripSummary } from '@/lib/types';
 
 // Weather ---------------------------------------------------------------------------------
 
@@ -20,10 +20,19 @@ export function useForecast(point: { latitude: number; longitude: number; elevat
 
 // Trips -----------------------------------------------------------------------------------
 
-export const tripKeys = { all: ['trips'] as const, detail: (id: string) => ['trips', id] as const };
+export const tripKeys = {
+  all: ['trips'] as const,
+  detail: (id: string) => ['trips', id] as const,
+  forGroup: (groupId: string) => ['trips', 'group', groupId] as const,
+};
 
+/** My own trips plus trips shared with my groups. */
 export function useTrips() {
   return useQuery({ queryKey: tripKeys.all, queryFn: ({ signal }) => api<TripSummary[]>('/api/trips', { signal }) });
+}
+
+export function useGroupTrips(groupId: string) {
+  return useQuery({ queryKey: tripKeys.forGroup(groupId), queryFn: ({ signal }) => api<TripSummary[]>('/api/trips', { query: { groupId }, signal }) });
 }
 
 export function useTrip(id: string) {
@@ -33,7 +42,8 @@ export function useTrip(id: string) {
 export function useCreateTrip() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; description?: string | null; startDate: string; endDate: string }) => api<Trip>('/api/trips', { method: 'POST', body }),
+    mutationFn: (body: { name: string; description?: string | null; startDate: string; endDate: string; groupId?: string | null }) =>
+      api<Trip>('/api/trips', { method: 'POST', body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: tripKeys.all }),
   });
 }
@@ -43,8 +53,10 @@ type TripChange =
   | { kind: 'addTrail'; day: number; trailId: string }
   | { kind: 'removeTrail'; day: number; trailId: string }
   | { kind: 'updateDay'; day: number; notes: string | null; overnight: string | null }
-  | { kind: 'addItem'; text: string }
+  | { kind: 'share'; groupId: string | null }
+  | { kind: 'addItem'; text: string; itemKind: ChecklistItemKind }
   | { kind: 'toggleItem'; itemId: string; isDone: boolean }
+  | { kind: 'claimItem'; itemId: string; claim: boolean }
   | { kind: 'removeItem'; itemId: string }
   | { kind: 'complete' }
   | { kind: 'cancel' };
@@ -64,10 +76,14 @@ export function useTripChange(id: string) {
           return api<Trip>(`${base}/days/${change.day}/trails/${change.trailId}`, { method: 'DELETE' });
         case 'updateDay':
           return api<Trip>(`${base}/days/${change.day}`, { method: 'PUT', body: { notes: change.notes, overnight: change.overnight } });
+        case 'share':
+          return api<Trip>(`${base}/group`, { method: 'PUT', body: { groupId: change.groupId } });
         case 'addItem':
-          return api<Trip>(`${base}/checklist`, { method: 'POST', body: { text: change.text } });
+          return api<Trip>(`${base}/checklist`, { method: 'POST', body: { text: change.text, kind: change.itemKind } });
         case 'toggleItem':
           return api<Trip>(`${base}/checklist/${change.itemId}`, { method: 'PUT', body: { isDone: change.isDone } });
+        case 'claimItem':
+          return api<Trip>(`${base}/checklist/${change.itemId}/claim`, { method: 'PUT', body: { claim: change.claim } });
         case 'removeItem':
           return api<Trip>(`${base}/checklist/${change.itemId}`, { method: 'DELETE' });
         case 'complete':
@@ -79,7 +95,10 @@ export function useTripChange(id: string) {
     onSuccess: (trip) => {
       qc.setQueryData(tripKeys.detail(id), trip);
       void qc.invalidateQueries({ queryKey: tripKeys.all, exact: true });
+      void qc.invalidateQueries({ queryKey: ['trips', 'group'] });
     },
+    // Someone else changed it first (e.g. claimed the same item): show the latest state.
+    onError: () => qc.invalidateQueries({ queryKey: tripKeys.detail(id) }),
   });
 }
 

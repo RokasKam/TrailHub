@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.BuildingBlocks.Infrastructure.Persistence;
@@ -82,9 +84,29 @@ internal sealed class GroupRepository(GroupsDbContext db) : IGroupRepository
     public Task<bool> IsMemberAsync(Guid groupId, string userId, CancellationToken cancellationToken) =>
         db.Groups.AnyAsync(g => g.Id == groupId && g.Members.Any(m => m.UserId == userId), cancellationToken);
 
+    public async Task<IReadOnlyList<HikingGroup>> GetAllAsync(CancellationToken cancellationToken) =>
+        await db.Groups.AsNoTracking().ToListAsync(cancellationToken);
+
     public void Add(HikingGroup group) => db.Groups.Add(group);
 
     public void Remove(HikingGroup group) => db.Groups.Remove(group);
+}
+
+/// <summary>Publishes every group's members once the service is up (see <see cref="RepublishGroupMembersCommand"/>).</summary>
+internal sealed class GroupMembersResync(IServiceScopeFactory scopes, ILogger<GroupMembersResync> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<ICommandHandler<RepublishGroupMembersCommand>>().Handle(new RepublishGroupMembersCommand(), stoppingToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(e, "Couldn't republish group members; other services may be out of date until the next change");
+        }
+    }
 }
 
 /// <summary>One Redis key per (group, member) with a sliding TTL; falls back to in-memory when Redis isn't configured.</summary>
@@ -146,6 +168,7 @@ public static class DependencyInjection
         }
 
         services.AddTrailHubMessaging(configuration);
+        services.AddHostedService<GroupMembersResync>();
         services.AddHealthChecks().AddDbContextCheck<GroupsDbContext>("groups-db", tags: ["ready"]);
         return services;
     }

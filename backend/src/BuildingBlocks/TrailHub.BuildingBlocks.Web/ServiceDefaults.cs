@@ -60,12 +60,18 @@ public static class ServiceDefaults
         {
             // Value objects throw ArgumentException when handed impossible values; that's a bad request, not a crash.
             var isBadInput = exception is ArgumentException or BadHttpRequestException;
-            if (!isBadInput)
+
+            // Two people changed the same row at once (optimistic concurrency); the client should reload and retry.
+            // Matched by name so this layer doesn't depend on EF Core.
+            var isConflict = exception.GetType().Name == "DbUpdateConcurrencyException";
+            if (!isBadInput && !isConflict)
             {
                 logger.LogError(exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
             }
 
-            context.Response.StatusCode = isBadInput ? StatusCodes.Status400BadRequest : StatusCodes.Status500InternalServerError;
+            context.Response.StatusCode = isBadInput ? StatusCodes.Status400BadRequest
+                : isConflict ? StatusCodes.Status409Conflict
+                : StatusCodes.Status500InternalServerError;
             return await problemDetails.TryWriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
@@ -73,8 +79,8 @@ public static class ServiceDefaults
                 ProblemDetails =
                 {
                     Status = context.Response.StatusCode,
-                    Title = isBadInput ? "Invalid request" : "An unexpected error occurred",
-                    Detail = isBadInput ? exception.Message : null,
+                    Title = isBadInput ? "Invalid request" : isConflict ? "Someone else changed this at the same time" : "An unexpected error occurred",
+                    Detail = isBadInput ? exception.Message : isConflict ? "Reload and try again." : null,
                 },
             });
         }

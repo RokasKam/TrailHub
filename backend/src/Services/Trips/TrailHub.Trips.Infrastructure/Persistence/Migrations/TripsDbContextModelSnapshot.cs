@@ -40,6 +40,9 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
 
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -66,9 +69,32 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GroupId");
+
                     b.HasIndex("OwnerId", "StartDate");
 
                     b.ToTable("Trips", "trips");
+                });
+
+            modelBuilder.Entity("TrailHub.Trips.Infrastructure.KnownGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KnownGroups", "trips");
                 });
 
             modelBuilder.Entity("TrailHub.Trips.Domain.Trips.Trip", b =>
@@ -78,8 +104,26 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("Id")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("AddedBy")
+                                .IsRequired()
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
+
+                            b1.Property<string>("ClaimedBy")
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
+
+                            b1.PrimitiveCollection<List<string>>("DoneBy")
+                                .IsRequired()
+                                .HasColumnType("text[]");
+
                             b1.Property<bool>("IsDone")
                                 .HasColumnType("boolean");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
 
                             b1.Property<string>("Text")
                                 .IsRequired()
@@ -88,6 +132,12 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
 
                             b1.Property<Guid>("TripId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<uint>("xmin")
+                                .IsConcurrencyToken()
+                                .ValueGeneratedOnAddOrUpdate()
+                                .HasColumnType("xid")
+                                .HasColumnName("xmin");
 
                             b1.HasKey("Id");
 
@@ -133,6 +183,35 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
                     b.Navigation("Checklist");
 
                     b.Navigation("Days");
+                });
+
+            modelBuilder.Entity("TrailHub.Trips.Infrastructure.KnownGroup", b =>
+                {
+                    b.OwnsMany("TrailHub.Trips.Infrastructure.KnownGroupMember", "Members", b1 =>
+                        {
+                            b1.Property<Guid>("GroupId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("UserId")
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
+
+                            b1.Property<string>("DisplayName")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.HasKey("GroupId", "UserId");
+
+                            b1.HasIndex("UserId");
+
+                            b1.ToTable("KnownGroupMembers", "trips");
+
+                            b1.WithOwner()
+                                .HasForeignKey("GroupId");
+                        });
+
+                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

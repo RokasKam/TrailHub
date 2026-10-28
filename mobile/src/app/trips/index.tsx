@@ -1,18 +1,24 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { useCreateTrip, useTrips } from '@/api/planning';
+import { useCreateTrip, useGroups, useTrips } from '@/api/planning';
 import { DateField, toDateOnly } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
-import { formatDate } from '@/lib/format';
+import { TripList } from '@/components/trip-list';
+import { Button, Card, Chip, Input, QueryState, Screen, Section } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 30;
 
 export default function TripsScreen() {
+  // Opened from a group's page, the new trip is shared with that group by default.
+  const params = useLocalSearchParams<{ groupId?: string }>();
   const trips = useTrips();
+  const groups = useGroups();
   const create = useCreateTrip();
+  const [groupId, setGroupId] = useState<string | null>(params.groupId ?? null);
   const [today] = useState(() => new Date());
   const [name, setName] = useState('');
   const [start, setStart] = useState(() => new Date(Date.now() + 7 * DAY_MS));
@@ -29,7 +35,7 @@ export default function TripsScreen() {
 
   const submit = () =>
     create.mutate(
-      { name, startDate: toDateOnly(start), endDate: toDateOnly(end) },
+      { name, startDate: toDateOnly(start), endDate: toDateOnly(end), groupId },
       {
         onSuccess: (trip) => {
           setName('');
@@ -37,6 +43,9 @@ export default function TripsScreen() {
         },
       },
     );
+
+  const mine = trips.data?.filter((t) => t.isOwner) ?? [];
+  const sharedWithMe = trips.data?.filter((t) => !t.isOwner) ?? [];
 
   return (
     <Screen>
@@ -48,6 +57,19 @@ export default function TripsScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {datesValid ? `${days} day${days > 1 ? 's' : ''}` : `A trip can be 1–${MAX_DAYS} days.`}
           </ThemedText>
+          {!!groups.data?.length && (
+            <View style={{ gap: Spacing.two }}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Share with
+              </ThemedText>
+              <View style={styles.chips}>
+                <Chip icon="lock" label="Just me" selected={groupId == null} onPress={() => setGroupId(null)} />
+                {groups.data.map((g) => (
+                  <Chip key={g.id} icon="person.3" label={g.name} selected={groupId === g.id} onPress={() => setGroupId(g.id)} />
+                ))}
+              </View>
+            </View>
+          )}
           {create.error && <ThemedText type="small">{create.error.message}</ThemedText>}
           <Button icon="plus" label="Create trip" onPress={submit} loading={create.isPending} disabled={!name.trim() || !datesValid} />
         </Card>
@@ -55,21 +77,18 @@ export default function TripsScreen() {
 
       <Section title="Your trips">
         <QueryState isLoading={trips.isLoading} error={trips.error} hasData={!!trips.data?.length} empty={trips.data?.length === 0} emptyText="No trips planned yet." emptyIcon="map" />
-        {!!trips.data?.length && (
-          <List>
-            {trips.data.map((t) => (
-              <ListRow
-                key={t.id}
-                icon={t.status === 'Completed' ? 'checkmark.circle.fill' : t.status === 'Cancelled' ? 'xmark.circle.fill' : 'map.fill'}
-                iconColor={t.status === 'Completed' ? '#16A34A' : t.status === 'Cancelled' ? '#9CA3AF' : '#EA580C'}
-                title={t.name}
-                detail={`${formatDate(t.startDate)} – ${formatDate(t.endDate)} · ${t.dayCount} day${t.dayCount > 1 ? 's' : ''} · ${t.trailCount} trail${t.trailCount === 1 ? '' : 's'}`}
-                onPress={() => router.push(`/trips/${t.id}`)}
-              />
-            ))}
-          </List>
-        )}
+        {!!mine.length && <TripList trips={mine} />}
       </Section>
+
+      {!!sharedWithMe.length && (
+        <Section title="Shared with you">
+          <TripList trips={sharedWithMe} />
+        </Section>
+      )}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+});

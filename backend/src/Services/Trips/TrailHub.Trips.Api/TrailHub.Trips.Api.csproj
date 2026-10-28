@@ -3,4 +3,7 @@
     <ProjectReference Include="../TrailHub.Trips.Infrastructure/TrailHub.Trips.Infrastructure.csproj" />
     <ProjectReference Include="../../../BuildingBlocks/TrailHub.BuildingBlocks.Web/TrailHub.BuildingBlocks.Web.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+  </ItemGroup>
 </Project>

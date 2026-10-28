@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { Alert, Share, StyleSheet, View } from 'react-native';
 
 import { useGroupLiveLocation } from '@/api/live-location';
-import { useGroup, useLeaveGroup, useLiveLocations, useRsvp, useScheduleGroupHike } from '@/api/planning';
+import { useGroup, useGroupTrips, useLeaveGroup, useLiveLocations, useRsvp, useScheduleGroupHike } from '@/api/planning';
 import { useProfile } from '@/api/profile';
 import { useSession } from '@/auth/session';
 import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { TrailMap } from '@/components/trail-map';
 import { TrailPicker } from '@/components/trail-picker';
+import { TripList } from '@/components/trip-list';
 import { Accent, Badge, Button, Card, Chip, Icon, IconButton, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,6 +26,7 @@ export default function GroupScreen() {
   const locations = useLiveLocations(id);
   const live = useGroupLiveLocation(id); // receives others' updates over SignalR
   const leave = useLeaveGroup(id);
+  const trips = useGroupTrips(id);
   const allowSharing = useProfile().data?.preferences.shareLocationWithGroups ?? false;
   const sharing = useGroupSharingStore((s) => s.groupIds.includes(id));
   const [busy, setBusy] = useState(false);
@@ -109,6 +111,18 @@ export default function GroupScreen() {
           <HikeCard key={h.id} groupId={id} hike={h} names={names} myId={user?.id} />
         ))}
         <ScheduleHikeForm groupId={id} />
+      </Section>
+
+      <Section
+        title="Trips"
+        action={<Button size="small" variant="tinted" icon="plus" label="Plan" onPress={() => router.push({ pathname: '/trips', params: { groupId: id } })} />}>
+        {trips.data?.filter((t) => t.status === 'Planned').length ? (
+          <TripList trips={trips.data.filter((t) => t.status === 'Planned')} />
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            No shared trips yet. Plan one to split the gear and pack together.
+          </ThemedText>
+        )}
       </Section>
 
       <Section title={`Members · ${g.members.length}`}>

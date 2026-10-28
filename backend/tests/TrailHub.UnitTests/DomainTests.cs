@@ -190,6 +190,96 @@ public sealed class TripTests
         Assert.Equal(TripErrors.EndBeforeStart, Trip.Create("u", "T", null, June1, June1.AddDays(-1), DateTime.UtcNow).Error);
         Assert.Equal(TripErrors.TooLong, Trip.Create("u", "T", null, June1, June1.AddDays(Trip.MaxDays), DateTime.UtcNow).Error);
     }
+
+    private static Trip SharedTrip()
+    {
+        var trip = Trip.Create("owner", "Tatra traverse", null, June1, June1.AddDays(2), DateTime.UtcNow).Value;
+        trip.LinkGroup(Guid.NewGuid());
+        return trip;
+    }
+
+    [Fact]
+    public void Personal_items_are_ticked_per_person()
+    {
+        var trip = SharedTrip();
+        var headlamp = trip.AddChecklistItem("owner", "Headlamp").Value;
+
+        trip.SetChecklistItemDone("anna", headlamp.Id, true);
+
+        Assert.True(headlamp.IsDoneFor("anna"));
+        Assert.False(headlamp.IsDoneFor("owner"));
+    }
+
+    [Fact]
+    public void Shared_gear_has_one_claimer_and_only_they_can_tick_it()
+    {
+        var trip = SharedTrip();
+        var stove = trip.AddChecklistItem("owner", "Stove", ChecklistItemKind.Shared).Value;
+
+        Assert.True(trip.ClaimChecklistItem("anna", stove.Id, true).IsSuccess);
+
+        Assert.Equal(TripErrors.ClaimedBySomeoneElse, trip.ClaimChecklistItem("tom", stove.Id, true).Error);
+        Assert.Equal(TripErrors.ClaimedBySomeoneElse, trip.SetChecklistItemDone("tom", stove.Id, true).Error);
+        Assert.True(trip.SetChecklistItemDone("anna", stove.Id, true).IsSuccess);
+        Assert.True(stove.IsDone);
+    }
+
+    [Fact]
+    public void Ticking_unclaimed_gear_claims_it_and_the_owner_can_release_any_claim()
+    {
+        var trip = SharedTrip();
+        var tent = trip.AddChecklistItem("owner", "Tent", ChecklistItemKind.Shared).Value;
+
+        trip.SetChecklistItemDone("tom", tent.Id, true);
+        Assert.Equal("tom", tent.ClaimedBy);
+
+        Assert.True(trip.ClaimChecklistItem("owner", tent.Id, false).IsSuccess);
+        Assert.Null(tent.ClaimedBy);
+        Assert.False(tent.IsDone);
+    }
+
+    [Fact]
+    public void Shared_gear_needs_a_group_and_members_remove_only_their_own_items()
+    {
+        var solo = Trip.Create("owner", "Solo", null, June1, June1, DateTime.UtcNow).Value;
+        Assert.Equal(TripErrors.SharedItemNeedsGroup, solo.AddChecklistItem("owner", "Stove", ChecklistItemKind.Shared).Error);
+
+        var trip = SharedTrip();
+        var map = trip.AddChecklistItem("owner", "Map", ChecklistItemKind.Shared).Value;
+        var snacks = trip.AddChecklistItem("anna", "Snacks").Value;
+
+        Assert.Equal(TripErrors.NotYourItem, trip.RemoveChecklistItem("anna", map.Id).Error);
+        Assert.True(trip.RemoveChecklistItem("anna", snacks.Id).IsSuccess);
+        Assert.True(trip.RemoveChecklistItem("owner", map.Id).IsSuccess);
+    }
+
+    [Fact]
+    public void People_who_leave_the_group_lose_claims_and_ticks()
+    {
+        var trip = SharedTrip();
+        var stove = trip.AddChecklistItem("owner", "Stove", ChecklistItemKind.Shared).Value;
+        var water = trip.AddChecklistItem("owner", "Water").Value;
+        trip.ClaimChecklistItem("anna", stove.Id, true);
+        trip.SetChecklistItemDone("anna", water.Id, true);
+        trip.SetChecklistItemDone("owner", water.Id, true);
+
+        Assert.True(trip.SyncGroupMembers(["owner", "tom"]));
+
+        Assert.Null(stove.ClaimedBy);
+        Assert.Equal(["owner"], water.DoneBy);
+        Assert.False(trip.SyncGroupMembers(["owner", "tom"]));
+    }
+
+    [Fact]
+    public void Trip_becomes_private_when_its_owner_leaves_the_group()
+    {
+        var trip = SharedTrip();
+        trip.AddChecklistItem("owner", "Stove", ChecklistItemKind.Shared);
+
+        trip.SyncGroupMembers(["anna"]);
+
+        Assert.Null(trip.GroupId);
+    }
 }
 
 public sealed class HikingGroupTests

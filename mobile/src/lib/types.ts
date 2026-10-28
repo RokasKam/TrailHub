@@ -143,7 +143,33 @@ export type Forecast = {
 };
 
 export type TripStatus = 'Planned' | 'Completed' | 'Cancelled';
-export type TripSummary = { id: string; name: string; startDate: string; endDate: string; dayCount: number; status: TripStatus; trailCount: number };
+export type TripSummary = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  dayCount: number;
+  status: TripStatus;
+  trailCount: number;
+  groupId: string | null;
+  groupName: string | null;
+  isOwner: boolean;
+  /** Group gear nobody has claimed yet. */
+  sharedUnclaimed: number;
+};
+export type ChecklistItemKind = 'Personal' | 'Shared';
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  kind: ChecklistItemKind;
+  /** Personal: whether I've packed mine. Shared: whether the person bringing it has packed it. */
+  isDone: boolean;
+  claimedBy: string | null;
+  claimedByName: string | null;
+  addedBy: string;
+  canRemove: boolean;
+};
+export type TripMember = { userId: string; displayName: string; isOwner: boolean; personalDone: number };
 export type Trip = {
   id: string;
   name: string;
@@ -153,7 +179,13 @@ export type Trip = {
   dayCount: number;
   status: TripStatus;
   days: { dayNumber: number; date: string; notes: string | null; overnight: string | null; trailIds: string[] }[];
-  checklist: { id: string; text: string; isDone: boolean }[];
+  checklist: ChecklistItem[];
+  ownerId: string;
+  isOwner: boolean;
+  groupId: string | null;
+  groupName: string | null;
+  /** The group's members and how many personal items each has packed; empty for private trips. */
+  members: TripMember[];
 };
 
 export type GroupRole = 'Owner' | 'Member';

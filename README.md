@@ -60,6 +60,7 @@ cd backend
 cp .env.example .env          # set AUTH_MODE=Development to try it without Auth0
 docker compose up -d --build  # gateway on http://localhost:8080
 ./scripts/smoke-test.sh       # 42 end-to-end checks through the gateway (needs AUTH_MODE=Development)
+node scripts/group-trips-test.mjs  # 21 checks for shared group trips: access, claims, live updates
 ```
 
 **Swagger UI: http://localhost:8080/swagger.** It's one page for all six services; pick one under *Select a definition*.

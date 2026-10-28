@@ -1,13 +1,16 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 
-import { useTrip, useTripChange } from '@/api/planning';
+import { useTripLiveUpdates } from '@/api/live-location';
+import { useGroups, useTrip, useTripChange } from '@/api/planning';
 import { useTrail } from '@/api/trails';
+import { useSession } from '@/auth/session';
 import { DateField, toDateOnly } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { TrailPicker } from '@/components/trail-picker';
-import { Button, Card, Icon, Input, List, QueryState, Screen, Section } from '@/components/ui';
+import { TripChecklist } from '@/components/trip-checklist';
+import { Button, Card, Chip, Icon, Input, QueryState, Screen, Section } from '@/components/ui';
 import { WeatherCard } from '@/components/weather-card';
 import { Spacing } from '@/constants/theme';
 import { formatDate } from '@/lib/format';
@@ -24,20 +27,31 @@ const fromDateOnly = (s: string) => {
 
 export default function TripScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useSession();
   const trip = useTrip(id);
   const change = useTripChange(id);
+  useTripLiveUpdates(id, trip.data?.groupId != null); // others' claims and ticks show up within seconds
   const [pickingFor, setPickingFor] = useState<number | null>(null);
   const [editingDay, setEditingDay] = useState<number | null>(null);
-  const [item, setItem] = useState('');
 
   if (!trip.data) return <Screen><QueryState isLoading={trip.isLoading} error={trip.error} /></Screen>;
   const t = trip.data;
-  const editable = t.status === 'Planned';
+  // The plan is the owner's; people the trip is shared with see it read-only and use the checklist.
+  const editable = t.status === 'Planned' && t.isOwner;
+  const planner = t.members.find((m) => m.isOwner)?.displayName;
 
   return (
     <Screen>
       <Stack.Screen options={{ title: '' }} />
-      <ThemedText type="subtitle">{t.name}</ThemedText>
+      <View>
+        <ThemedText type="subtitle">{t.name}</ThemedText>
+        {!t.isOwner && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Planned by {planner ?? 'a group member'} · {t.groupName}
+          </ThemedText>
+        )}
+      </View>
+      {t.isOwner && t.status === 'Planned' && <ShareCard trip={t} change={change} />}
       {editable ? (
         <Card>
           <DateField
@@ -61,7 +75,8 @@ export default function TripScreen() {
         </Card>
       ) : (
         <ThemedText type="small" themeColor="textSecondary">
-          {formatDate(t.startDate)} – {formatDate(t.endDate)} · {t.status}
+          {formatDate(t.startDate)} – {formatDate(t.endDate)} · {t.dayCount} day{t.dayCount > 1 ? 's' : ''}
+          {t.status !== 'Planned' && ` · ${t.status}`}
         </ThemedText>
       )}
       {change.error && <ThemedText type="small">{change.error.message}</ThemedText>}
@@ -103,28 +118,7 @@ export default function TripScreen() {
         </Section>
       ))}
 
-      <Section title="Checklist">
-        {t.checklist.length > 0 && (
-          <List>
-            {t.checklist.map((c) => (
-              <Pressable key={c.id} onPress={() => change.mutate({ kind: 'toggleItem', itemId: c.id, isDone: !c.isDone })} onLongPress={() => change.mutate({ kind: 'removeItem', itemId: c.id })}>
-                <View style={styles.checkItem}>
-                  <Icon name={c.isDone ? 'checkmark.circle.fill' : 'circle'} size={22} color={c.isDone ? '#16A34A' : '#A8A29E'} weight="regular" />
-                  <ThemedText style={[{ flex: 1 }, c.isDone && styles.done]}>{c.text}</ThemedText>
-                </View>
-              </Pressable>
-            ))}
-          </List>
-        )}
-        <Input
-          icon="plus.circle"
-          placeholder="Add item (long-press an item to remove it)"
-          value={item}
-          onChangeText={setItem}
-          returnKeyType="done"
-          onSubmitEditing={() => item.trim() && change.mutate({ kind: 'addItem', text: item }, { onSuccess: () => setItem('') })}
-        />
-      </Section>
+      <TripChecklist trip={t} myId={user?.id} change={change} />
 
       {editable && (
         <View style={styles.row}>
@@ -144,6 +138,52 @@ export default function TripScreen() {
         onSelect={(trail) => change.mutate({ kind: 'addTrail', day: pickingFor!, trailId: trail.id }, { onSettled: () => setPickingFor(null) })}
       />
     </Screen>
+  );
+}
+
+/** Who can see this trip: private, or one of my groups. Changing it is the owner's call. */
+function ShareCard({ trip, change }: { trip: Trip; change: ReturnType<typeof useTripChange> }) {
+  const groups = useGroups();
+  const [open, setOpen] = useState(false);
+  const share = (groupId: string | null) => {
+    const apply = () => change.mutate({ kind: 'share', groupId }, { onSuccess: () => setOpen(false), onError: (e) => Alert.alert("Couldn't share", e.message) });
+    // Leaving a group drops other people's claims and ticks, so confirm first.
+    if (trip.groupId && groupId !== trip.groupId) {
+      Alert.alert(groupId ? 'Move to another group?' : 'Make this trip private?', "Other people's claims and ticks will be cleared.", [
+        { text: 'Cancel', style: 'cancel' },
+        { text: groupId ? 'Move' : 'Make private', style: 'destructive', onPress: apply },
+      ]);
+    } else {
+      apply();
+    }
+  };
+
+  return (
+    <Card>
+      <View style={styles.inline}>
+        <Icon name={trip.groupId ? 'person.3.fill' : 'lock.fill'} size={16} color={trip.groupId ? '#2563EB' : '#64748B'} />
+        <View style={{ flex: 1 }}>
+          <ThemedText type="smallBold">{trip.groupId ? `Shared with ${trip.groupName ?? 'your group'}` : 'Private trip'}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {trip.groupId ? `${trip.members.length} member${trip.members.length === 1 ? '' : 's'} can see it and split the gear` : 'Share it with a group to split the gear'}
+          </ThemedText>
+        </View>
+        <Button size="small" variant="tinted" label={open ? 'Done' : trip.groupId ? 'Change' : 'Share'} onPress={() => setOpen(!open)} />
+      </View>
+      {open && (
+        <View style={styles.chips}>
+          {groups.data?.length === 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {"You're not in any groups yet. Create or join one under Profile → Groups."}
+            </ThemedText>
+          )}
+          {groups.data?.map((g) => (
+            <Chip key={g.id} icon="person.3" label={g.name} selected={trip.groupId === g.id} onPress={() => share(g.id)} />
+          ))}
+          {trip.groupId && <Chip icon="lock" label="Private" onPress={() => share(null)} />}
+        </View>
+      )}
+    </Card>
   );
 }
 
@@ -186,7 +226,6 @@ function DayTrail({ trailId, date, onRemove }: { trailId: string; date: string; 
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: Spacing.two },
-  done: { textDecorationLine: 'line-through', opacity: 0.5 },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  checkItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three - 4, minHeight: 44 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });

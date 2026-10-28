@@ -41,6 +41,8 @@ public static class MessagingExtensions
             });
         });
 
+        // Start the bus before other hosted services run, so they can publish on startup.
+        services.Configure<MassTransitHostOptions>(o => o.WaitUntilStarted = true);
         services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
         return services;
     }

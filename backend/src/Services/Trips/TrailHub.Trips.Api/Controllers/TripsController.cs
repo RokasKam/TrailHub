@@ -2,19 +2,26 @@ using Microsoft.AspNetCore.Mvc;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Web;
 using TrailHub.Trips.Application.Trips;
+using TrailHub.Trips.Domain.Trips;
 
 namespace TrailHub.Trips.Api.Controllers;
 
 /// <summary>Multi-day trip planning: dates, per-day trails and notes, and a packing checklist.</summary>
-/// <remarks>Trips are private; another user's trip id returns 404. Every edit returns the updated trip.</remarks>
+/// <remarks>
+/// A trip is private until its owner shares it with one of their groups. Then every group member can see it
+/// and use the checklist, while the plan itself (dates, days, trails) stays the owner's. A trip you can't see
+/// returns 404. Every edit returns the updated trip, and people with the trip open get a <c>TripChanged</c>
+/// message over SignalR at <c>/hubs/trips</c> (call <c>WatchTrip</c> first).
+/// </remarks>
 [Route("api/trips")]
 public sealed class TripsController : ApiController
 {
-    /// <summary>The caller's trips, by start date.</summary>
+    /// <summary>The caller's own trips and trips shared with their groups, by start date.</summary>
+    /// <param name="groupId">Only trips shared with this group (you must be a member).</param>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<TripSummaryDto>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<TripSummaryDto>>> List([FromServices] IQueryHandler<GetMyTripsQuery, IReadOnlyList<TripSummaryDto>> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new GetMyTripsQuery(), ct));
+    public async Task<ActionResult<IReadOnlyList<TripSummaryDto>>> List([FromQuery] Guid? groupId, [FromServices] IQueryHandler<GetMyTripsQuery, IReadOnlyList<TripSummaryDto>> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new GetMyTripsQuery(groupId), ct));
 
     /// <summary>A trip with its day plans and checklist.</summary>
     [HttpGet("{id:guid}")]
@@ -23,7 +30,7 @@ public sealed class TripsController : ApiController
     public async Task<ActionResult<TripDto>> Get(Guid id, [FromServices] IQueryHandler<GetTripQuery, TripDto> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new GetTripQuery(id), ct));
 
-    /// <summary>Creates a trip with one empty day plan per date (max 30 days).</summary>
+    /// <summary>Creates a trip with one empty day plan per date (max 30 days), optionally shared with a group.</summary>
     [HttpPost]
     [ProducesResponseType<TripDto>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -36,6 +43,15 @@ public sealed class TripsController : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, [FromServices] ICommandHandler<DeleteTripCommand> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new DeleteTripCommand(id), ct));
+
+    /// <summary>Shares the trip with one of your groups, or makes it private again with <c>groupId: null</c>. Owner only.</summary>
+    /// <remarks>Making it private, or moving it to another group, drops other people's claims and ticks.</remarks>
+    [HttpPut("{id:guid}/group")]
+    [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TripDto>> Share(Guid id, TripGroupRequest body, [FromServices] ICommandHandler<ShareTripCommand, TripDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new ShareTripCommand(id, body.GroupId), ct));
 
     /// <summary>Renames the trip or edits its description.</summary>
     [HttpPut("{id:guid}")]
@@ -68,19 +84,26 @@ public sealed class TripsController : ApiController
     public Task<ActionResult<TripDto>> RemoveTrail(Guid id, int day, Guid trailId, [FromServices] ICommandHandler<RemoveTrailFromDayCommand, TripDto> handler, CancellationToken ct) =>
         Send(handler, new RemoveTrailFromDayCommand(id, day, trailId), ct);
 
-    /// <summary>Adds a checklist item.</summary>
+    /// <summary>Adds a checklist item: <c>Personal</c> (everyone brings their own, the default) or <c>Shared</c> group gear.</summary>
     [HttpPost("{id:guid}/checklist")]
     [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
     public Task<ActionResult<TripDto>> AddChecklistItem(Guid id, ChecklistItemRequest body, [FromServices] ICommandHandler<AddChecklistItemCommand, TripDto> handler, CancellationToken ct) =>
-        Send(handler, new AddChecklistItemCommand(id, body.Text), ct);
+        Send(handler, new AddChecklistItemCommand(id, body.Text, body.Kind ?? ChecklistItemKind.Personal), ct);
 
-    /// <summary>Ticks or unticks a checklist item.</summary>
+    /// <summary>"I'll bring it" on a shared item (<c>claim: true</c>), or taking it back. The owner can release anyone's claim.</summary>
+    [HttpPut("{id:guid}/checklist/{itemId:guid}/claim")]
+    [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public Task<ActionResult<TripDto>> ClaimChecklistItem(Guid id, Guid itemId, ChecklistClaimRequest body, [FromServices] ICommandHandler<ClaimChecklistItemCommand, TripDto> handler, CancellationToken ct) =>
+        Send(handler, new ClaimChecklistItemCommand(id, itemId, body.Claim), ct);
+
+    /// <summary>Ticks or unticks an item: your own copy of a personal item, or a shared item you're bringing (ticking an unclaimed one claims it).</summary>
     [HttpPut("{id:guid}/checklist/{itemId:guid}")]
     [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
     public Task<ActionResult<TripDto>> SetChecklistItemDone(Guid id, Guid itemId, ChecklistDoneRequest body, [FromServices] ICommandHandler<SetChecklistItemDoneCommand, TripDto> handler, CancellationToken ct) =>
         Send(handler, new SetChecklistItemDoneCommand(id, itemId, body.IsDone), ct);
 
-    /// <summary>Removes a checklist item.</summary>
+    /// <summary>Removes a checklist item. The owner can remove any item, others only the ones they added.</summary>
     [HttpDelete("{id:guid}/checklist/{itemId:guid}")]
     [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
     public Task<ActionResult<TripDto>> RemoveChecklistItem(Guid id, Guid itemId, [FromServices] ICommandHandler<RemoveChecklistItemCommand, TripDto> handler, CancellationToken ct) =>
@@ -109,6 +132,10 @@ public sealed record TripDatesRequest(DateOnly StartDate, DateOnly EndDate);
 
 public sealed record TripDayRequest(string? Notes, string? Overnight);
 
-public sealed record ChecklistItemRequest(string Text);
+public sealed record ChecklistItemRequest(string Text, ChecklistItemKind? Kind);
+
+public sealed record ChecklistClaimRequest(bool Claim);
+
+public sealed record TripGroupRequest(Guid? GroupId);
 
 public sealed record ChecklistDoneRequest(bool IsDone);

@@ -17,6 +17,8 @@ public interface IGroupRepository
 
     Task<bool> IsMemberAsync(Guid groupId, string userId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<HikingGroup>> GetAllAsync(CancellationToken cancellationToken);
+
     void Add(HikingGroup group);
 
     void Remove(HikingGroup group);
@@ -72,6 +74,20 @@ internal static class GroupMappings
             h.Rsvps.Select(r => new RsvpDto(r.UserId, r.Status, r.RespondedAtUtc)).ToList());
 }
 
+internal static class MembershipEvents
+{
+    /// <summary>Lets other services (Trips) keep their copy of who's in the group current.</summary>
+    public static Task PublishMembersAsync(this IEventPublisher events, HikingGroup group, DateTime nowUtc, CancellationToken cancellationToken, bool deleted = false) =>
+        events.PublishAsync(
+            new GroupMembersChangedIntegrationEvent(
+                group.Id,
+                group.Name,
+                deleted ? [] : group.Members.Select(m => new GroupMemberSnapshot(m.UserId, m.DisplayName)).ToList(),
+                deleted,
+                nowUtc),
+            cancellationToken);
+}
+
 internal static class InviteCodes
 {
     // No 0/O/1/I: codes get read aloud and typed from screenshots.
@@ -82,7 +98,7 @@ internal static class InviteCodes
 
 public sealed record CreateGroupCommand(string Name, string? Description, string? DisplayName) : ICommand<GroupDto>;
 
-internal sealed class CreateGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, ICurrentUser user, TimeProvider clock)
+internal sealed class CreateGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, IEventPublisher events, ICurrentUser user, TimeProvider clock)
     : ICommandHandler<CreateGroupCommand, GroupDto>
 {
     public async Task<Result<GroupDto>> Handle(CreateGroupCommand command, CancellationToken cancellationToken)
@@ -96,13 +112,14 @@ internal sealed class CreateGroupHandler(IGroupRepository groups, IUnitOfWork un
 
         groups.Add(group.Value);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await events.PublishMembersAsync(group.Value, now, cancellationToken);
         return group.Value.ToDto(user.UserId, now);
     }
 }
 
 public sealed record JoinGroupCommand(string InviteCode, string? DisplayName) : ICommand<GroupDto>;
 
-internal sealed class JoinGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, ICurrentUser user, TimeProvider clock)
+internal sealed class JoinGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, IEventPublisher events, ICurrentUser user, TimeProvider clock)
     : ICommandHandler<JoinGroupCommand, GroupDto>
 {
     public async Task<Result<GroupDto>> Handle(JoinGroupCommand command, CancellationToken cancellationToken)
@@ -121,6 +138,7 @@ internal sealed class JoinGroupHandler(IGroupRepository groups, IUnitOfWork unit
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await events.PublishMembersAsync(group, now, cancellationToken);
         return group.ToDto(user.UserId, now);
     }
 }
@@ -149,7 +167,8 @@ internal abstract class GroupActionHandler(IGroupRepository groups, IUnitOfWork 
 
 public sealed record LeaveGroupCommand(Guid GroupId) : ICommand;
 
-internal sealed class LeaveGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, ILiveLocationStore locations, ILiveLocationNotifier notifier, ICurrentUser user)
+internal sealed class LeaveGroupHandler(
+    IGroupRepository groups, IUnitOfWork unitOfWork, ILiveLocationStore locations, ILiveLocationNotifier notifier, IEventPublisher events, ICurrentUser user, TimeProvider clock)
     : GroupActionHandler(groups, unitOfWork), ICommandHandler<LeaveGroupCommand>
 {
     public async Task<Result> Handle(LeaveGroupCommand command, CancellationToken cancellationToken)
@@ -157,6 +176,7 @@ internal sealed class LeaveGroupHandler(IGroupRepository groups, IUnitOfWork uni
         var result = await RunAsync(command.GroupId, g => g.Leave(user.UserId), cancellationToken);
         if (result.IsSuccess)
         {
+            await events.PublishMembersAsync(result.Value, clock.GetUtcNow().UtcDateTime, cancellationToken);
             await locations.RemoveAsync(command.GroupId, user.UserId, cancellationToken);
             await notifier.LocationRemovedAsync(command.GroupId, user.UserId, cancellationToken);
         }
@@ -167,7 +187,8 @@ internal sealed class LeaveGroupHandler(IGroupRepository groups, IUnitOfWork uni
 
 public sealed record RemoveMemberCommand(Guid GroupId, string UserId) : ICommand;
 
-internal sealed class RemoveMemberHandler(IGroupRepository groups, IUnitOfWork unitOfWork, ILiveLocationStore locations, ILiveLocationNotifier notifier, ICurrentUser user)
+internal sealed class RemoveMemberHandler(
+    IGroupRepository groups, IUnitOfWork unitOfWork, ILiveLocationStore locations, ILiveLocationNotifier notifier, IEventPublisher events, ICurrentUser user, TimeProvider clock)
     : GroupActionHandler(groups, unitOfWork), ICommandHandler<RemoveMemberCommand>
 {
     public async Task<Result> Handle(RemoveMemberCommand command, CancellationToken cancellationToken)
@@ -175,6 +196,7 @@ internal sealed class RemoveMemberHandler(IGroupRepository groups, IUnitOfWork u
         var result = await RunAsync(command.GroupId, g => g.RemoveMember(user.UserId, command.UserId), cancellationToken);
         if (result.IsSuccess)
         {
+            await events.PublishMembersAsync(result.Value, clock.GetUtcNow().UtcDateTime, cancellationToken);
             await locations.RemoveAsync(command.GroupId, command.UserId, cancellationToken);
             await notifier.LocationRemovedAsync(command.GroupId, command.UserId, cancellationToken);
         }
@@ -209,7 +231,8 @@ internal sealed class RegenerateInviteCodeHandler(IGroupRepository groups, IUnit
 
 public sealed record DeleteGroupCommand(Guid GroupId) : ICommand;
 
-internal sealed class DeleteGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, ICurrentUser user) : ICommandHandler<DeleteGroupCommand>
+internal sealed class DeleteGroupHandler(IGroupRepository groups, IUnitOfWork unitOfWork, IEventPublisher events, ICurrentUser user, TimeProvider clock)
+    : ICommandHandler<DeleteGroupCommand>
 {
     public async Task<Result> Handle(DeleteGroupCommand command, CancellationToken cancellationToken)
     {
@@ -226,6 +249,7 @@ internal sealed class DeleteGroupHandler(IGroupRepository groups, IUnitOfWork un
 
         groups.Remove(group);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await events.PublishMembersAsync(group, clock.GetUtcNow().UtcDateTime, cancellationToken, deleted: true);
         return Result.Success();
     }
 }
@@ -340,5 +364,25 @@ internal sealed class GetGroupHandler(IGroupRepository groups, ICurrentUser user
     {
         var group = await groups.GetByIdAsync(query.GroupId, cancellationToken);
         return group is null || !group.IsMember(user.UserId) ? GroupErrors.NotFound : group.ToDto(user.UserId, clock.GetUtcNow().UtcDateTime);
+    }
+}
+
+/// <summary>
+/// Re-publishes every group's member list. Run at startup so services that keep a copy (Trips) catch up
+/// on groups created before they subscribed, or on events lost while they were down. Consumers ignore duplicates.
+/// </summary>
+public sealed record RepublishGroupMembersCommand : ICommand;
+
+internal sealed class RepublishGroupMembersHandler(IGroupRepository groups, IEventPublisher events, TimeProvider clock) : ICommandHandler<RepublishGroupMembersCommand>
+{
+    public async Task<Result> Handle(RepublishGroupMembersCommand command, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        foreach (var group in await groups.GetAllAsync(cancellationToken))
+        {
+            await events.PublishMembersAsync(group, now, cancellationToken);
+        }
+
+        return Result.Success();
     }
 }

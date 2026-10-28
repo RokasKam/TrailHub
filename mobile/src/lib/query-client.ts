@@ -28,7 +28,7 @@ export const persistOptions = {
   persister: queryPersister,
   maxAge: 7 * DAY,
   // Bump when DTO shapes change so stale caches are dropped instead of crashing screens.
-  buster: 'v1',
+  buster: 'v2', // v2: trips gained group sharing (members, checklist kinds)
   dehydrateOptions: {
     // The default keeps only status 'success'. A refetch that fails offline flips a query to 'error' while it
     // still holds data, so the default would drop exactly the cached trails you need without signal.
