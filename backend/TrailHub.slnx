@@ -29,6 +29,12 @@
     <Project Path="src/Services/Profile/TrailHub.Profile.Domain/TrailHub.Profile.Domain.csproj" />
     <Project Path="src/Services/Profile/TrailHub.Profile.Infrastructure/TrailHub.Profile.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Routes/">
+    <Project Path="src/Services/Routes/TrailHub.Routes.Api/TrailHub.Routes.Api.csproj" />
+    <Project Path="src/Services/Routes/TrailHub.Routes.Application/TrailHub.Routes.Application.csproj" />
+    <Project Path="src/Services/Routes/TrailHub.Routes.Domain/TrailHub.Routes.Domain.csproj" />
+    <Project Path="src/Services/Routes/TrailHub.Routes.Infrastructure/TrailHub.Routes.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Trails/">
     <Project Path="src/Services/Trails/TrailHub.Trails.Api/TrailHub.Trails.Api.csproj" />
     <Project Path="src/Services/Trails/TrailHub.Trails.Application/TrailHub.Trails.Application.csproj" />

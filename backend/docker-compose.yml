@@ -115,6 +115,19 @@ services:
       <<: *service-env
       ConnectionStrings__GroupsDb: Host=postgres;Database=trailhub_groups;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
 
+  routes-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Routes/TrailHub.Routes.Api, APP_DLL: TrailHub.Routes.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__RoutesDb: Host=postgres;Database=trailhub_routes;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+      # Mapbox does routing, place search and huts/water/campsites. The app's public pk. token works.
+      # Without it, routes are straight lines and places come from free OpenStreetMap services.
+      Routing__Mapbox__AccessToken: ${MAPBOX_ACCESS_TOKEN:-}
+      # Optional: set ROUTING_PROVIDER=OpenRouteService (with a free key) for its hiking profile and trail grades.
+      Routing__Provider: ${ROUTING_PROVIDER:-}
+      Routing__OpenRouteService__ApiKey: ${OPENROUTESERVICE_API_KEY:-}
+
   weather-api:
     <<: *service
     build: { context: ., args: { PROJECT: src/Services/Weather/TrailHub.Weather.Api, APP_DLL: TrailHub.Weather.Api.dll } }
@@ -125,7 +138,7 @@ services:
     build: { context: ., args: { PROJECT: src/Gateway/TrailHub.Gateway, APP_DLL: TrailHub.Gateway.dll } }
     restart: unless-stopped
     ports: ["8080:8080"]
-    depends_on: [profile-api, trails-api, activity-api, trips-api, groups-api, weather-api]
+    depends_on: [profile-api, trails-api, activity-api, trips-api, groups-api, routes-api, weather-api]
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ReverseProxy__Clusters__profile__Destinations__d1__Address: http://profile-api:8080
@@ -133,6 +146,7 @@ services:
       ReverseProxy__Clusters__activity__Destinations__d1__Address: http://activity-api:8080
       ReverseProxy__Clusters__trips__Destinations__d1__Address: http://trips-api:8080
       ReverseProxy__Clusters__groups__Destinations__d1__Address: http://groups-api:8080
+      ReverseProxy__Clusters__routes__Destinations__d1__Address: http://routes-api:8080
       ReverseProxy__Clusters__weather__Destinations__d1__Address: http://weather-api:8080
       ReverseProxy__Clusters__photos__Destinations__d1__Address: http://seaweedfs:8333
 

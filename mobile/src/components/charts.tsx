@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { Accent } from '@/components/ui';
@@ -13,7 +13,8 @@ function useWidth() {
   return [width, (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)] as const;
 }
 
-export function ElevationChart({ samples, units, height = 140 }: { samples: ElevationSample[]; units: Units; height?: number }) {
+/** `markers`: distances (m) to mark with a dashed line and a label, e.g. where each day of a multi-day route starts. */
+export function ElevationChart({ samples, units, height = 140, markers = [] }: { samples: ElevationSample[]; units: Units; height?: number; markers?: { distanceMeters: number; label: string }[] }) {
   const [width, onLayout] = useWidth();
   if (samples.length < 2) return null;
 
@@ -39,6 +40,14 @@ export function ElevationChart({ samples, units, height = 140 }: { samples: Elev
           </Defs>
           <Path d={area} fill="url(#fill)" />
           <Path d={line} stroke={Accent} strokeWidth={2} fill="none" />
+          {markers.map((m) => (
+            <Line key={m.label} x1={x(m.distanceMeters)} x2={x(m.distanceMeters)} y1={0} y2={height} stroke="#7C3AED" strokeWidth={1} strokeDasharray="3,3" />
+          ))}
+          {markers.map((m) => (
+            <SvgText key={`${m.label}-t`} x={x(m.distanceMeters) + 3} y={11} fontSize={10} fontWeight="600" fill="#7C3AED">
+              {m.label}
+            </SvgText>
+          ))}
         </Svg>
       )}
       <View style={styles.axis}>

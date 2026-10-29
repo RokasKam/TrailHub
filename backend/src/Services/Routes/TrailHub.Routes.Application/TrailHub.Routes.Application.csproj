@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../TrailHub.Routes.Domain/TrailHub.Routes.Domain.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/TrailHub.BuildingBlocks.Application/TrailHub.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/TrailHub.Contracts/TrailHub.Contracts.csproj" />
+  </ItemGroup>
+</Project>

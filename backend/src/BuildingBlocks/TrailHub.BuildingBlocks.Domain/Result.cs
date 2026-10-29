@@ -6,6 +6,9 @@ public enum ErrorType
     NotFound,
     Conflict,
     Forbidden,
+
+    /// <summary>A dependency (e.g. a third-party API) is down; worth retrying later.</summary>
+    Unavailable,
 }
 
 public sealed record Error(string Code, string Message, ErrorType Type)
@@ -17,6 +20,8 @@ public sealed record Error(string Code, string Message, ErrorType Type)
     public static Error Conflict(string code, string message) => new(code, message, ErrorType.Conflict);
 
     public static Error Forbidden(string code, string message) => new(code, message, ErrorType.Forbidden);
+
+    public static Error Unavailable(string code, string message) => new(code, message, ErrorType.Unavailable);
 }
 
 /// <summary>Outcome of an operation that can fail for an expected (business) reason.</summary>

@@ -220,3 +220,50 @@ export type LiveLocation = {
   headingDegrees: number | null;
   recordedAtUtc: string;
 };
+
+// Route planner -------------------------------------------------------------------------
+
+export type PoiKind = 'WaterSource' | 'Campsite' | 'MountainHut' | 'Shelter' | 'Hotel' | 'Viewpoint';
+export type Accommodation = 'Tent' | 'Hut' | 'Hotel';
+export type PlanDifficulty = 'Easy' | 'Moderate' | 'Hard' | 'Expert';
+export type RouteWaypoint = { latitude: number; longitude: number; name?: string | null; isOvernight: boolean; kind?: PoiKind | null };
+export type TrackStats = {
+  distanceMeters: number;
+  ascentMeters: number;
+  descentMeters: number;
+  minElevationMeters: number | null;
+  maxElevationMeters: number | null;
+  durationMinutes: number;
+  /** Hardest SAC grade: 1 = T1 … 6 = T6; 0 = unknown. */
+  maxSacScale: number;
+};
+export type RouteDay = { day: number; startDistanceMeters: number; stats: TrackStats; overnight: RouteWaypoint | null };
+export type PlannedRoute = {
+  id: string | null;
+  name: string | null;
+  description: string | null;
+  waypoints: RouteWaypoint[];
+  /** [latitude, longitude, elevation] */
+  path: [number, number, number | null][];
+  stats: TrackStats;
+  elevationProfile: ElevationSample[];
+  days: RouteDay[];
+  /** False when the line is straight between waypoints (no paths found or routing not configured). */
+  snapped: boolean;
+  warnings: string[];
+  updatedAtUtc: string | null;
+};
+export type RouteSummary = {
+  id: string;
+  name: string;
+  distanceMeters: number;
+  ascentMeters: number;
+  durationMinutes: number;
+  dayCount: number;
+  snapped: boolean;
+  startLatitude: number;
+  startLongitude: number;
+  updatedAtUtc: string;
+};
+export type Poi = { id: string; name: string; kind: PoiKind; latitude: number; longitude: number; elevation: number | null };
+export type Place = { name: string; region: string | null; latitude: number; longitude: number };

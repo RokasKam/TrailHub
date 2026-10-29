@@ -7,7 +7,7 @@ import { Accent } from '@/components/ui';
 import { config } from '@/config';
 import { Radius } from '@/constants/theme';
 import { toCameraBounds } from '@/lib/geo';
-import type { Bounds, MapStyle, PointOfInterestType } from '@/lib/types';
+import type { Bounds, MapStyle, PointOfInterestType, PoiKind } from '@/lib/types';
 
 Mapbox.setAccessToken(config.mapboxToken);
 
@@ -21,13 +21,20 @@ export function useMapStyleUrl() {
   return STYLE_URLS[useProfile().data?.preferences.mapStyle ?? 'Outdoors'];
 }
 
-const POI_COLORS: Record<PointOfInterestType, string> = {
+const POI_COLORS: Record<PointOfInterestType | PoiKind, string> = {
   WaterSource: '#2563EB',
   Shelter: '#92400E',
   Campsite: '#15803D',
+  MountainHut: '#B45309',
+  Hotel: '#DB2777',
   Viewpoint: '#9333EA',
   Other: '#475569',
 };
+
+export const poiColor = (type: PointOfInterestType | PoiKind) => POI_COLORS[type];
+
+/** A coloured line drawn under the main route, e.g. an alternative the user can pick. */
+export type MapVariant = { id: string; coordinates: Coordinate[]; color: string };
 
 type Coordinate = { latitude: number; longitude: number };
 
@@ -38,7 +45,8 @@ type TrailMapProps = {
   lines?: Coordinate[][];
   /** A planned route drawn dashed under `lines`, e.g. the trail being followed while recording. */
   guide?: Coordinate[];
-  pois?: (Coordinate & { id: string; name: string; type: PointOfInterestType })[];
+  pois?: (Coordinate & { id: string; name: string; type: PointOfInterestType | PoiKind })[];
+  variants?: MapVariant[];
   markers?: MapMarker[];
   bounds?: Bounds;
   center?: Coordinate;
@@ -51,7 +59,7 @@ type TrailMapProps = {
   onMapPress?: (coordinate: Coordinate) => void;
 };
 
-export function TrailMap({ lines = [], guide, pois = [], markers = [], bounds, center, zoom = 12, showUser, followUser, height = 280, onMarkerPress, onMapPress }: TrailMapProps) {
+export function TrailMap({ lines = [], guide, pois = [], variants = [], markers = [], bounds, center, zoom = 12, showUser, followUser, height = 280, onMarkerPress, onMapPress }: TrailMapProps) {
   const styleURL = useMapStyleUrl();
 
   const lineShape = useMemo<GeoJSON.FeatureCollection>(
@@ -67,6 +75,16 @@ export function TrailMap({ lines = [], guide, pois = [], markers = [], bounds, c
   const guideShape = useMemo<GeoJSON.Feature<GeoJSON.LineString>>(
     () => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: (guide ?? []).map((p) => [p.longitude, p.latitude]) } }),
     [guide],
+  );
+
+  const variantShape = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: 'FeatureCollection',
+      features: variants
+        .filter((v) => v.coordinates.length >= 2)
+        .map((v) => ({ type: 'Feature', properties: { color: v.color }, geometry: { type: 'LineString', coordinates: v.coordinates.map((p) => [p.longitude, p.latitude]) } })),
+    }),
+    [variants],
   );
 
   const pointShape = useMemo<GeoJSON.FeatureCollection>(
@@ -118,11 +136,20 @@ export function TrailMap({ lines = [], guide, pois = [], markers = [], bounds, c
             <LineLayer id="guide-line" style={{ lineColor: '#6B7280', lineWidth: 3, lineDasharray: [2, 1.5], lineJoin: 'round', lineOpacity: 0.8 }} />
           </ShapeSource>
         )}
+        {variants.length > 0 && (
+          <ShapeSource key="variants" id="variants" shape={variantShape}>
+            <LineLayer id="variant-line" style={{ lineColor: ['get', 'color'], lineWidth: 4, lineOpacity: 0.75, lineJoin: 'round', lineCap: 'round' }} />
+          </ShapeSource>
+        )}
         <ShapeSource key="lines" id="lines" shape={lineShape}>
           <LineLayer id="line-casing" style={{ lineColor: '#ffffff', lineWidth: 7, lineJoin: 'round', lineCap: 'round' }} />
           <LineLayer id="line" style={{ lineColor: Accent, lineWidth: 4, lineJoin: 'round', lineCap: 'round' }} />
         </ShapeSource>
-        <ShapeSource key="points" id="points" shape={pointShape} onPress={(e) => onMarkerPress?.(String(e.features[0]?.properties?.id ?? ''))}>
+        <ShapeSource
+          key="points"
+          id="points"
+          shape={pointShape}
+          onPress={onMarkerPress && pointShape.features.length > 0 ? (e) => onMarkerPress(String(e.features[0]?.properties?.id ?? '')) : undefined}>
           <CircleLayer id="point-circles" style={{ circleRadius: 7, circleColor: ['get', 'color'], circleStrokeColor: '#fff', circleStrokeWidth: 2 }} />
           <SymbolLayer
             id="point-labels"

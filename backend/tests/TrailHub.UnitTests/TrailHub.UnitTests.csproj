@@ -13,6 +13,7 @@
     <ProjectReference Include="../../src/Services/Activity/TrailHub.Activity.Domain/TrailHub.Activity.Domain.csproj" />
     <ProjectReference Include="../../src/Services/Trips/TrailHub.Trips.Domain/TrailHub.Trips.Domain.csproj" />
     <ProjectReference Include="../../src/Services/Groups/TrailHub.Groups.Domain/TrailHub.Groups.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Routes/TrailHub.Routes.Domain/TrailHub.Routes.Domain.csproj" />
     <ProjectReference Include="../../src/Services/Weather/TrailHub.Weather.Domain/TrailHub.Weather.Domain.csproj" />
     <ProjectReference Include="../../src/BuildingBlocks/TrailHub.BuildingBlocks.Infrastructure/TrailHub.BuildingBlocks.Infrastructure.csproj" />
   </ItemGroup>

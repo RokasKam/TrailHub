@@ -46,6 +46,8 @@ function RootStack() {
         <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
         <Stack.Screen name="trips/[id]" options={{ title: 'Trip' }} />
         <Stack.Screen name="groups/index" options={{ title: 'Groups' }} />
+        <Stack.Screen name="routes/plan" options={{ title: 'Multi-day planner' }} />
+        <Stack.Screen name="routes/[id]" options={{ title: 'Route' }} />
         <Stack.Screen name="groups/[id]" options={{ title: 'Group' }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>

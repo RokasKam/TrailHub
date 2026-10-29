@@ -20,7 +20,8 @@ export class ApiError extends Error {
 /** User-facing text for a failed request: the server's problem detail, or a plain "can't connect" for network failures. */
 export function describeError(error: Error) {
   if (!(error instanceof ApiError)) return "Can't reach TrailHub. Check your connection and try again.";
-  if (error.status >= 500) return 'TrailHub is having trouble right now. Try again in a moment.';
+  // 503s carry a specific reason (e.g. a map data service is down); other 5xx are internal and not worth showing.
+  if (error.status >= 500 && !(error.status === 503 && error.message)) return 'TrailHub is having trouble right now. Try again in a moment.';
   return error.message;
 }
 

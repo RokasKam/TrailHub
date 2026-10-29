@@ -1,0 +1,18 @@
+diff --git a/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXMapViewComponentView.mm b/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXMapViewComponentView.mm
+index 97efff2..a50d850 100644
+--- a/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXMapViewComponentView.mm
++++ b/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXMapViewComponentView.mm
+@@ -245,6 +245,13 @@ using namespace facebook::react;
+   [_view didSetProps:@[]];
+ }
+ 
++// TrailHub patch: don't reuse map views across screens. A recycled map view stops delivering taps
++// (onPress and layer presses) on iOS, so the route editor and meeting-point picker ignored taps.
+++ (BOOL)shouldBeRecycled
++{
++  return NO;
++}
++
+ - (void)prepareForRecycle
+ {
+     [super prepareForRecycle];

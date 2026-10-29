@@ -22,6 +22,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('map.fill', require('@/assets/images/tabIcons/explore.png'))} />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="plan">
+        <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon {...icon('point.topleft.down.to.point.bottomright.curvepath.fill', require('@/assets/images/tabIcons/explore.png'))} />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="record">
         <NativeTabs.Trigger.Label>Record</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('record.circle.fill', require('@/assets/images/tabIcons/home.png'))} />

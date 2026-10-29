@@ -32,7 +32,8 @@ export const persistOptions = {
   dehydrateOptions: {
     // The default keeps only status 'success'. A refetch that fails offline flips a query to 'error' while it
     // still holds data, so the default would drop exactly the cached trails you need without signal.
-    shouldDehydrateQuery: (query: Query) => query.state.data !== undefined,
+    // Queries can opt out with `meta: { persist: false }` (e.g. throwaway route previews, which can be large).
+    shouldDehydrateQuery: (query: Query) => query.state.data !== undefined && query.meta?.persist !== false,
   },
 };
 

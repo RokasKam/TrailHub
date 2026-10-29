@@ -10,7 +10,7 @@ namespace TrailHub.ArchitectureTests;
 /// </summary>
 public sealed class DependencyRuleTests
 {
-    private static readonly string[] ServiceNames = ["Profile", "Trails", "Activity", "Trips", "Groups", "Weather"];
+    private static readonly string[] ServiceNames = ["Profile", "Trails", "Activity", "Trips", "Groups", "Routes", "Weather"];
 
     public static TheoryData<string> Services => new(ServiceNames);
 

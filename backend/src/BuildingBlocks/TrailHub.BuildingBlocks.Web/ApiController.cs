@@ -37,6 +37,7 @@ public abstract class ApiController : ControllerBase
                 ErrorType.NotFound => StatusCodes.Status404NotFound,
                 ErrorType.Conflict => StatusCodes.Status409Conflict,
                 ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+                ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status500InternalServerError,
             },
             title: error.Code,
