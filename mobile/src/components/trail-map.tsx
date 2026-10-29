@@ -1,6 +1,6 @@
-import Mapbox, { Camera, CircleLayer, LineLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps';
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import Mapbox, { Camera, CircleLayer, LineLayer, LocationPuck, MapView, PointAnnotation, ShapeSource, SymbolLayer } from '@rnmapbox/maps';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useProfile } from '@/api/profile';
 import { Accent } from '@/components/ui';
@@ -48,6 +48,9 @@ type TrailMapProps = {
   pois?: (Coordinate & { id: string; name: string; type: PointOfInterestType | PoiKind })[];
   variants?: MapVariant[];
   markers?: MapMarker[];
+  /** Markers the user can drag (long-press, then move). Tapping one calls `onMarkerPress`. */
+  draggableMarkers?: MapMarker[];
+  onMarkerDragEnd?: (id: string, coordinate: Coordinate) => void;
   bounds?: Bounds;
   center?: Coordinate;
   zoom?: number;
@@ -59,7 +62,9 @@ type TrailMapProps = {
   onMapPress?: (coordinate: Coordinate) => void;
 };
 
-export function TrailMap({ lines = [], guide, pois = [], variants = [], markers = [], bounds, center, zoom = 12, showUser, followUser, height = 280, onMarkerPress, onMapPress }: TrailMapProps) {
+export function TrailMap({ lines = [], guide, pois = [], variants = [], markers = [], draggableMarkers = [], bounds, center, zoom = 12, showUser, followUser, height = 280, onMarkerPress, onMarkerDragEnd, onMapPress }: TrailMapProps) {
+  // An annotation stays "selected" after a tap and ignores the next one; remounting it after each tap resets that.
+  const [tapCount, setTapCount] = useState(0);
   const styleURL = useMapStyleUrl();
 
   const lineShape = useMemo<GeoJSON.FeatureCollection>(
@@ -108,7 +113,13 @@ export function TrailMap({ lines = [], guide, pois = [], variants = [], markers 
     [markers, pois],
   );
 
-  const cameraBounds = bounds ? { ...toCameraBounds(bounds), paddingTop: 40, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 } : undefined;
+  // Keyed on the values, not the object: a new bounds object on every render would snap the camera back while panning.
+  const boundsKey = bounds ? [bounds.minLatitude, bounds.minLongitude, bounds.maxLatitude, bounds.maxLongitude].join() : '';
+  const cameraBounds = useMemo(
+    () => (bounds ? { ...toCameraBounds(bounds), paddingTop: 40, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 } : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boundsKey captures bounds
+    [boundsKey],
+  );
 
   return (
     <View style={[styles.container, { height }]}>
@@ -156,6 +167,30 @@ export function TrailMap({ lines = [], guide, pois = [], variants = [], markers 
             style={{ textField: ['get', 'label'], textSize: 12, textOffset: [0, 1.4], textHaloColor: '#fff', textHaloWidth: 1.5, textOptional: true }}
           />
         </ShapeSource>
+        {draggableMarkers.map((m) => (
+          <PointAnnotation
+            // Annotations are drawn once as an image; a new key redraws them when their colour or label changes.
+            key={`${m.id}-${m.color}-${m.label}-${tapCount}`}
+            id={m.id}
+            coordinate={[m.longitude, m.latitude]}
+            draggable
+            anchor={{ x: 0.5, y: PIN_DOT / 2 / PIN_HEIGHT }} // the dot, not the label below it, sits on the point
+            onSelected={() => {
+              setTapCount((n) => n + 1);
+              onMarkerPress?.(m.id);
+            }}
+            onDragEnd={(e) => {
+              const [longitude, latitude] = e.geometry.coordinates;
+              onMarkerDragEnd?.(m.id, { latitude, longitude });
+            }}>
+            <View style={styles.pin}>
+              <View style={[styles.pinDot, { backgroundColor: m.color ?? Accent }]} />
+              <Text style={styles.pinLabel} numberOfLines={1}>
+                {m.label ?? ''}
+              </Text>
+            </View>
+          </PointAnnotation>
+        ))}
       </MapView>
     </View>
   );
@@ -195,6 +230,12 @@ export async function downloadOfflineRegion(name: string, bounds: Bounds, styleU
   );
 }
 
+const PIN_DOT = 18;
+const PIN_HEIGHT = 36;
+
 const styles = StyleSheet.create({
+  pin: { alignItems: 'center', width: 96, height: PIN_HEIGHT },
+  pinDot: { width: PIN_DOT, height: PIN_DOT, borderRadius: PIN_DOT / 2, borderWidth: 3, borderColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.35)' },
+  pinLabel: { fontSize: 12, fontWeight: '600', color: '#111', textShadowColor: '#fff', textShadowRadius: 3, height: PIN_HEIGHT - PIN_DOT, lineHeight: PIN_HEIGHT - PIN_DOT },
   container: { borderRadius: Radius.large, borderCurve: 'continuous', overflow: 'hidden' },
 });

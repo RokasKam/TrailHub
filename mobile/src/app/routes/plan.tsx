@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useCreateTrip } from '@/api/planning';
@@ -14,13 +14,31 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, describeError } from '@/lib/api';
 import { formatDistance } from '@/lib/format';
-import type { Accommodation, Place, PlanDifficulty, PlannedRoute, Trip } from '@/lib/types';
+import type { Accommodation, Bounds, Place, PlanDifficulty, PlannedRoute, Trip } from '@/lib/types';
 
 const DAY_MS = 86_400_000;
 const MAX_DAILY_OPTIONS = [null, 12, 16, 20, 25, 30] as const;
 
 type PickTarget = 'start' | 'finish' | 'via' | null;
 const MAX_VIA = 8;
+
+/** Smallest box around the points, so the map shows the whole hike (or everything picked so far). */
+function boundsOf(points: { latitude: number; longitude: number }[]): Bounds | undefined {
+  if (points.length < 2) return undefined;
+  const lats = points.map((p) => p.latitude);
+  const lons = points.map((p) => p.longitude);
+  return { minLatitude: Math.min(...lats), minLongitude: Math.min(...lons), maxLatitude: Math.max(...lats), maxLongitude: Math.max(...lons) };
+}
+
+/** `value`, once it has stopped changing for `ms`: search as the user pauses, not on every keystroke. */
+function useDebounced<T>(value: T, ms = 300) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
 
 export default function PlannerScreen() {
   const units = useUnits();
@@ -82,6 +100,16 @@ export default function PlannerScreen() {
     }
   };
 
+  const mapBounds = useMemo(
+    () =>
+      boundsOf(
+        result
+          ? result.path.map(([latitude, longitude]) => ({ latitude, longitude }))
+          : [start, ...via, finish].filter((p): p is Place => p !== null),
+      ),
+    [result, start, via, finish],
+  );
+
   const overnightMarkers = (result?.waypoints ?? [])
     .map((w, i) => ({ w, i }))
     .filter(({ w }) => w.isOvernight)
@@ -140,8 +168,9 @@ export default function PlannerScreen() {
               ...(result ? [] : via.map((v, i) => ({ id: `via-${i}`, latitude: v.latitude, longitude: v.longitude, label: v.name, color: '#0F172A' }))),
               ...overnightMarkers,
             ]}
+            bounds={mapBounds}
             center={start ?? finish ?? { latitude: 45.9237, longitude: 6.8694 }}
-            zoom={start && finish ? 9 : 11}
+            zoom={11}
             onMapPress={
               picking
                 ? (c) => {
@@ -272,7 +301,8 @@ function PlaceField({
   near: Place | null;
 }) {
   const [text, setText] = useState('');
-  const results = usePlaceSearch(value ? '' : text, near);
+  const query = useDebounced(text);
+  const results = usePlaceSearch(value ? '' : query, near);
 
   if (value) {
     return (

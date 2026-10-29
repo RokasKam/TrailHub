@@ -97,8 +97,10 @@ export default function RouteEditorScreen() {
   const remove = useDeleteRoute();
   const findAlternatives = useAlternatives();
 
-  // Edits live here until saved; until the first edit, the saved route is shown.
+  // Edits live here until saved; until the first edit, the saved route is shown. Each edit pushes the previous
+  // waypoints onto `history`, so undo steps back through moves, removals and overnight changes, not just added points.
   const [edited, setEdited] = useState<RouteWaypoint[] | null>(null);
+  const [history, setHistory] = useState<(RouteWaypoint[] | null)[]>([]);
   const [name, setName] = useState<string | null>(null);
   const [poiFilters, setPoiFilters] = useState<string[]>(['Water', 'Huts', 'Campsites']);
   const [initialCenter, setInitialCenter] = useState<{ latitude: number; longitude: number } | null>(id ? null : FALLBACK_CENTER);
@@ -122,9 +124,26 @@ export default function RouteEditorScreen() {
 
   if (id && !saved.data) return <Screen><QueryState isLoading={saved.isLoading} error={saved.error} onRetry={() => saved.refetch()} /></Screen>;
 
+  // With unsaved changes, back asks first (and swipe-back is off, so it can't skip the question).
+  const dirty = edited !== null || (name !== null && name !== (saved.data?.name ?? ''));
+  const back = () =>
+    dirty
+      ? Alert.alert('Discard changes?', id ? 'Your changes to this route are not saved.' : 'This route is not saved.', [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+        ])
+      : router.back();
+
   const update = (next: RouteWaypoint[]) => {
     findAlternatives.reset();
+    setHistory([...history, edited]);
     setEdited(next);
+  };
+  const undo = () => {
+    if (history.length === 0) return;
+    findAlternatives.reset();
+    setEdited(history[history.length - 1]);
+    setHistory(history.slice(0, -1));
   };
   const insert = (w: RouteWaypoint) => {
     const at = insertionIndex(route, waypoints, w);
@@ -156,6 +175,7 @@ export default function RouteEditorScreen() {
       {
         onSuccess: (r) => {
           setEdited(null);
+          setHistory([]);
           setName(null);
           if (!id) router.replace(`/routes/${r.id}`);
           then?.(r.id!);
@@ -191,7 +211,10 @@ export default function RouteEditorScreen() {
       <Stack.Screen
         options={{
           title: id ? 'Route' : 'New route',
-          headerRight: () => <IconButton icon="arrow.uturn.backward" label="Undo last point" onPress={() => waypoints.length && update(waypoints.slice(0, -1))} />,
+          gestureEnabled: !dirty,
+          headerBackVisible: !dirty,
+          headerLeft: dirty ? () => <IconButton icon="chevron.left" label="Back" onPress={back} /> : undefined,
+          headerRight: () => (history.length > 0 ? <IconButton icon="arrow.uturn.backward" label="Undo" onPress={undo} /> : null),
         }}
       />
 
@@ -199,7 +222,12 @@ export default function RouteEditorScreen() {
         height={400}
         lines={route ? [route.path.map(([latitude, longitude]) => ({ latitude, longitude }))] : []}
         variants={alternatives.slice(1).map((a, i) => ({ id: `alt-${i}`, color: ALTERNATIVE_COLORS[i + 1], coordinates: a.path.map(([latitude, longitude]) => ({ latitude, longitude })) }))}
-        markers={markers}
+        draggableMarkers={markers}
+        onMarkerDragEnd={(markerId, c) => {
+          const i = Number(markerId.slice(3));
+          // A dragged point is a new place: drop any hut name it had, keep whether the night is spent there.
+          update(waypoints.map((w, j) => (j === i ? { ...w, ...c, name: null, kind: null } : w)));
+        }}
         pois={poiList.map((p) => ({ id: `poi-${p.id}`, latitude: p.latitude, longitude: p.longitude, name: p.name, type: p.kind }))}
         bounds={fitted?.bounds}
         center={initialCenter ?? undefined}
@@ -219,7 +247,7 @@ export default function RouteEditorScreen() {
             ? 'Now tap where you want to go. The route follows hiking paths.'
             : preview.isFetching
               ? 'Routing…'
-              : 'Tap to add points, tap a point to change it, or tap a hut to stay the night.'}
+              : 'Tap to add points, hold and drag a point to move it, tap it for options, or tap a hut to stay the night.'}
       </ThemedText>
       {preview.error && <ThemedText type="small" style={{ color: '#DC2626' }}>{describeError(preview.error)}</ThemedText>}
 
@@ -300,7 +328,11 @@ export default function RouteEditorScreen() {
             onPress={() =>
               Alert.alert('Delete this route?', undefined, [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => remove.mutate(id, { onSuccess: () => router.back() }) },
+                {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => remove.mutate(id, { onSuccess: () => router.back() }),
+              },
               ])
             }
           />
