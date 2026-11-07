@@ -102,6 +102,7 @@ export default function ProfileScreen() {
       <List>
         <ListRow icon="map.fill" iconColor="#EA580C" title="Trips" detail="Multi-day plans and checklists" onPress={() => router.push('/trips')} />
         <ListRow icon="person.3.fill" iconColor="#2563EB" title="Groups" detail="Hike together, share your location" onPress={() => router.push('/groups')} />
+        <ListRow icon="checklist" iconColor="#1F7A4D" title="Gear lists" detail="Reusable packing lists for your trips" onPress={() => router.push('/gear')} />
         {moderation.isSuccess && (
           <ListRow
             icon="checkmark.shield.fill"

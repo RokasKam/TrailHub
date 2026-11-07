@@ -48,6 +48,8 @@ function RootStack() {
         <Stack.Screen name="groups/index" options={{ title: 'Groups' }} />
         <Stack.Screen name="routes/plan" options={{ title: 'Multi-day planner' }} />
         <Stack.Screen name="moderation" options={{ title: 'Moderation' }} />
+        <Stack.Screen name="gear/index" options={{ title: 'Gear lists' }} />
+        <Stack.Screen name="gear/[id]" options={{ title: 'Gear list' }} />
         <Stack.Screen name="routes/[id]" options={{ title: 'Route' }} />
         <Stack.Screen name="groups/[id]" options={{ title: 'Group' }} />
       </Stack.Protected>

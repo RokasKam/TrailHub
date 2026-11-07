@@ -24,6 +24,37 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("TrailHub.Trips.Domain.Gear.GearList", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("_items")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("Items");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("GearLists", "trips");
+                });
+
             modelBuilder.Entity("TrailHub.Trips.Domain.Trips.Trip", b =>
                 {
                     b.Property<Guid>("Id")

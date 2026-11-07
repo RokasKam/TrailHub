@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Web;
 using TrailHub.Trips.Application.Trips;
+using TrailHub.Trips.Domain.Gear;
 using TrailHub.Trips.Domain.Trips;
 
 namespace TrailHub.Trips.Api.Controllers;
@@ -97,6 +98,36 @@ public sealed class TripsController : ApiController
     public Task<ActionResult<TripDto>> AddChecklistItem(Guid id, ChecklistItemRequest body, [FromServices] ICommandHandler<AddChecklistItemCommand, TripDto> handler, CancellationToken ct) =>
         Send(handler, new AddChecklistItemCommand(id, body.Text, body.Kind ?? ChecklistItemKind.Personal), ct);
 
+    /// <summary>Adds several checklist items at once (e.g. picked suggestions). Items already on the list are skipped.</summary>
+    [HttpPost("{id:guid}/checklist/bulk")]
+    [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
+    public Task<ActionResult<TripDto>> AddChecklistItems(Guid id, ChecklistItemsRequest body, [FromServices] ICommandHandler<AddChecklistItemsCommand, TripDto> handler, CancellationToken ct) =>
+        Send(handler, new AddChecklistItemsCommand(id, body.Items), ct);
+
+    /// <summary>Copies a gear list (yours, or a starter list like <c>starter:hut-trip</c>) into the checklist, skipping items it already has.</summary>
+    /// <remarks>On a private trip, group gear is added as personal items.</remarks>
+    [HttpPost("{id:guid}/checklist/from-list/{listId}")]
+    [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TripDto>> AddGearList(Guid id, string listId, [FromServices] ICommandHandler<AddGearListToTripCommand, TripDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new AddGearListToTripCommand(id, listId), ct));
+
+    /// <summary>Saves the trip's checklist as one of your gear lists.</summary>
+    [HttpPost("{id:guid}/checklist/save-as-list")]
+    [ProducesResponseType<GearListDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<GearListDto>> SaveAsGearList(Guid id, SaveAsGearListRequest body, [FromServices] ICommandHandler<SaveChecklistAsGearListCommand, GearListDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new SaveChecklistAsGearListCommand(id, body.Name), ct));
+
+    /// <summary>
+    /// Packing suggestions for this trip, each with the reason ("3 nights in huts", "Up to 2,900 m"). Items already on
+    /// the checklist are left out. Send what the app knows about the planned route; anything missing is guessed
+    /// from the trip's days.
+    /// </summary>
+    [HttpPost("{id:guid}/gear-suggestions")]
+    [ProducesResponseType<IReadOnlyList<GearSuggestion>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<GearSuggestion>>> GearSuggestions(Guid id, GearSuggestionsRequest body, [FromServices] IQueryHandler<GetGearSuggestionsQuery, IReadOnlyList<GearSuggestion>> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new GetGearSuggestionsQuery(id, body.TentNights, body.HutNights, body.HotelNights, body.MaxElevationMeters, body.LongestDayMinutes), ct));
+
     /// <summary>"I'll bring it" on a shared item (<c>claim: true</c>), or taking it back. The owner can release anyone's claim.</summary>
     [HttpPut("{id:guid}/checklist/{itemId:guid}/claim")]
     [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
@@ -146,5 +177,11 @@ public sealed record ChecklistClaimRequest(bool Claim);
 public sealed record TripGroupRequest(Guid? GroupId);
 
 public sealed record TripRouteRequest(Guid? RouteId);
+
+public sealed record ChecklistItemsRequest(IReadOnlyList<GearItem> Items);
+
+public sealed record SaveAsGearListRequest(string Name);
+
+public sealed record GearSuggestionsRequest(int? TentNights, int? HutNights, int? HotelNights, double? MaxElevationMeters, int? LongestDayMinutes);
 
 public sealed record ChecklistDoneRequest(bool IsDone);

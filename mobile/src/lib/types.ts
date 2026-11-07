@@ -292,3 +292,11 @@ export type RouteSummary = {
 };
 export type Poi = { id: string; name: string; kind: PoiKind; latitude: number; longitude: number; elevation: number | null };
 export type Place = { name: string; region: string | null; latitude: number; longitude: number };
+
+// Gear lists ----------------------------------------------------------------------------
+
+export type GearItem = { text: string; kind: ChecklistItemKind };
+/** `id` is a GUID for your own lists, `starter:…` for the built-in read-only ones. */
+export type GearList = { id: string; name: string; items: GearItem[]; isStarter: boolean; updatedAtUtc: string | null };
+export type GearSuggestion = GearItem & { reason: string };
+export type GearFacts = { tentNights?: number; hutNights?: number; hotelNights?: number; maxElevationMeters?: number | null; longestDayMinutes?: number | null };

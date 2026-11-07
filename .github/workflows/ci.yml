@@ -96,6 +96,9 @@ jobs:
       - name: Group trips
         working-directory: backend
         run: node scripts/group-trips-test.mjs
+      - name: Gear lists
+        working-directory: backend
+        run: node scripts/gear-lists-test.mjs
       - name: Route sharing and publishing
         if: env.MAPBOX_ACCESS_TOKEN != ''
         working-directory: backend

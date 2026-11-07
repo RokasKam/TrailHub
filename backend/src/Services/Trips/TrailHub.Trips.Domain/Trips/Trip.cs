@@ -317,6 +317,34 @@ public sealed class Trip : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Adds several items at once (a gear list or suggestions). Items already on the checklist (same text, ignoring
+    /// case) are skipped; on a private trip, group gear becomes personal. Stops quietly when the checklist is full.
+    /// Returns how many were added.
+    /// </summary>
+    public int AddChecklistItems(string actorId, IEnumerable<(string Text, ChecklistItemKind Kind)> items)
+    {
+        var have = _checklist.Select(i => i.Text.ToUpperInvariant()).ToHashSet();
+        var added = 0;
+        foreach (var (text, kind) in items)
+        {
+            if (string.IsNullOrWhiteSpace(text) || text.Trim().Length > MaxNameLength || !have.Add(text.Trim().ToUpperInvariant()))
+            {
+                continue;
+            }
+
+            if (_checklist.Count >= MaxChecklistItems)
+            {
+                break;
+            }
+
+            _checklist.Add(new ChecklistItem(text.Trim(), GroupId is null ? ChecklistItemKind.Personal : kind, actorId));
+            added++;
+        }
+
+        return added;
+    }
+
+    /// <summary>
     /// Personal items: ticks the actor's own copy. Shared items: only the person bringing it can tick it;
     /// ticking an unclaimed shared item claims it at the same time.
     /// </summary>

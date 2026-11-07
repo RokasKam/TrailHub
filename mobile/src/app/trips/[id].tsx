@@ -15,6 +15,7 @@ import { SaveRouteOffline } from '@/components/offline-route';
 import { useStartRouteHike } from '@/components/route-hike';
 import { TrailMap } from '@/components/trail-map';
 import { TripChecklist } from '@/components/trip-checklist';
+import { TripPacking } from '@/components/trip-packing';
 import { Button, Card, Chip, Icon, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
 import { WeatherCard } from '@/components/weather-card';
 import { Spacing } from '@/constants/theme';
@@ -131,6 +132,7 @@ export default function TripScreen() {
       ))}
 
       <TripChecklist trip={t} myId={user?.id} change={change} />
+      {t.status === 'Planned' && <TripPacking trip={t} route={plannedRoute.data} />}
 
       {editable && (
         <View style={styles.row}>

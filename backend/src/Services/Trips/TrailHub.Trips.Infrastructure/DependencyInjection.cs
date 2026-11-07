@@ -6,15 +6,23 @@ using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.BuildingBlocks.Infrastructure.Persistence;
 using TrailHub.Trips.Application.Trips;
+using TrailHub.Trips.Domain.Gear;
 using TrailHub.Trips.Domain.Trips;
 
 namespace TrailHub.Trips.Infrastructure;
 
 public sealed class TripsDbContext(DbContextOptions<TripsDbContext> options) : DbContext(options), IUnitOfWork
 {
+    private static readonly System.Text.Json.JsonSerializerOptions GearJson = new(System.Text.Json.JsonSerializerDefaults.Web)
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+
     public DbSet<Trip> Trips => Set<Trip>();
 
     internal DbSet<KnownGroup> KnownGroups => Set<KnownGroup>();
+
+    public DbSet<GearList> GearLists => Set<GearList>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +65,23 @@ public sealed class TripsDbContext(DbContextOptions<TripsDbContext> options) : D
             item.Property<uint>("xmin").IsRowVersion();
         });
 
+        var gear = modelBuilder.Entity<GearList>();
+        gear.HasKey(g => g.Id);
+        gear.Property(g => g.OwnerId).HasMaxLength(128).IsRequired();
+        gear.Property(g => g.Name).HasMaxLength(GearList.MaxNameLength).IsRequired();
+        gear.HasIndex(g => g.OwnerId);
+        gear.Ignore(g => g.Items);
+        gear.Property<List<GearItem>>("_items")
+            .HasColumnName("Items")
+            .HasColumnType("jsonb")
+            .HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, GearJson),
+                v => System.Text.Json.JsonSerializer.Deserialize<List<GearItem>>(v, GearJson) ?? new List<GearItem>(),
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<GearItem>>(
+                    (a, b) => a!.SequenceEqual(b!),
+                    v => v.Aggregate(0, (h, i) => HashCode.Combine(h, i.GetHashCode())),
+                    v => v.ToList()));
+
         var group = modelBuilder.Entity<KnownGroup>();
         group.ToTable("KnownGroups");
         group.HasKey(g => g.Id);
@@ -72,6 +97,20 @@ public sealed class TripsDbContext(DbContextOptions<TripsDbContext> options) : D
             member.HasIndex(m => m.UserId);
         });
     }
+}
+
+internal sealed class GearListRepository(TripsDbContext db) : IGearListRepository
+{
+    public Task<GearList?> GetByIdAsync(Guid id, CancellationToken cancellationToken) => db.GearLists.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<GearList>> GetByOwnerAsync(string ownerId, CancellationToken cancellationToken) =>
+        await db.GearLists.AsNoTracking().Where(l => l.OwnerId == ownerId).OrderByDescending(l => l.UpdatedAtUtc).ToListAsync(cancellationToken);
+
+    public Task<int> CountByOwnerAsync(string ownerId, CancellationToken cancellationToken) => db.GearLists.CountAsync(l => l.OwnerId == ownerId, cancellationToken);
+
+    public void Add(GearList list) => db.GearLists.Add(list);
+
+    public void Remove(GearList list) => db.GearLists.Remove(list);
 }
 
 internal sealed class TripRepository(TripsDbContext db) : ITripRepository
@@ -104,6 +143,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<TripsDbContext>());
         services.AddScoped<ITripRepository, TripRepository>();
         services.AddScoped<IGroupDirectory, GroupDirectory>();
+        services.AddScoped<IGearListRepository, GearListRepository>();
         services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<GroupMembersChangedConsumer>());
         services.AddHealthChecks().AddDbContextCheck<TripsDbContext>("trips-db", tags: ["ready"]);
         return services;
