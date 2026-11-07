@@ -11,7 +11,8 @@ public sealed record RecordActivityCommand(
     string Name,
     Guid? TrailId,
     IReadOnlyList<IReadOnlyList<TrackPointDto>> Segments,
-    string? Notes) : ICommand<ActivitySummaryDto>;
+    string? Notes,
+    Guid? RouteId = null) : ICommand<ActivitySummaryDto>;
 
 /// <summary>
 /// Idempotent upload of a finished recording. Re-sending the same id (e.g. an offline queue
@@ -24,7 +25,7 @@ internal sealed class RecordActivityHandler(ActivitySaver saver) : ICommandHandl
         var segments = command.Segments
             .Select(s => new ActivitySegment(s.Select(p => new TrackPoint(p.Latitude, p.Longitude, p.Elevation, DateTime.SpecifyKind(p.TimestampUtc, DateTimeKind.Utc))).ToList()))
             .ToList();
-        return saver.SaveAsync(command.Id, command.Name, command.TrailId, segments, ActivitySource.Recorded, command.Notes, cancellationToken);
+        return saver.SaveAsync(command.Id, command.Name, command.TrailId, segments, ActivitySource.Recorded, command.Notes, cancellationToken, command.RouteId);
     }
 }
 
@@ -73,7 +74,8 @@ internal sealed class ActivitySaver(
         IReadOnlyList<ActivitySegment> segments,
         ActivitySource source,
         string? notes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? routeId = null)
     {
         if (await activities.GetByIdAsync(id, cancellationToken) is { } existing)
         {
@@ -87,6 +89,7 @@ internal sealed class ActivitySaver(
         }
 
         var activity = created.Value;
+        activity.FollowedRoute(routeId);
         activities.Add(activity);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -64,6 +64,7 @@ export default function ActivityScreen() {
       {a.notes && <ThemedText>{a.notes}</ThemedText>}
       <List>
         {a.trailId && <ListRow icon="map.fill" iconColor="#16A34A" title="View trail" onPress={() => router.push(`/trail/${a.trailId}`)} />}
+        {a.routeId && <ListRow icon="point.topleft.down.to.point.bottomright.curvepath" iconColor="#7C3AED" title="View planned route" onPress={() => router.push(`/routes/${a.routeId}`)} />}
         <ListRow
           icon="square.and.arrow.up"
           iconColor="#2563EB"

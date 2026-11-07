@@ -28,7 +28,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IPhotoStorage, S3PhotoStorage>();
         services.AddGpxSupport();
-        services.AddTrailHubMessaging(configuration);
+        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<Messaging.RoutePublishedConsumer>());
         services.AddHealthChecks().AddDbContextCheck<TrailsDbContext>("trails-db", tags: ["ready"]);
         return services;
     }

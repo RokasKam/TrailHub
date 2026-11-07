@@ -69,6 +69,9 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
                     b.Property<MultiLineString>("Path")
                         .HasColumnType("geography (multilinestring, 4326)");
 
+                    b.Property<Guid?>("RouteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Segments")
                         .IsRequired()
                         .HasColumnType("jsonb");

@@ -13,11 +13,16 @@ type RecordingState = {
   /** Generated on the device when recording starts; the server uses it as the activity id (idempotent upload). */
   activityId: string | null;
   trailId: string | null;
+  /** The planned route being followed, if the hike was started from one. */
+  routeId: string | null;
   trailName: string | null;
+  /** The line to follow, drawn dashed on the map. Stored with the recording so it works offline. */
+  guide: { latitude: number; longitude: number }[] | null;
   startedAtUtc: string | null;
   /** One array per stretch between pause/resume. */
   segments: TrackPoint[][];
-  start: (trail?: { id: string; name: string }) => void;
+  /** Starts recording, optionally following a Discover trail or (a day of) a planned route. */
+  start: (follow?: { trail?: { id: string; name: string }; route?: { id: string; name: string; guide: { latitude: number; longitude: number }[] } }) => void;
   pause: () => void;
   resume: () => void;
   addPoints: (points: TrackPoint[]) => void;
@@ -26,7 +31,7 @@ type RecordingState = {
   discard: () => void;
 };
 
-const initial = { status: 'idle' as const, activityId: null, trailId: null, trailName: null, startedAtUtc: null, segments: [] };
+const initial = { status: 'idle' as const, activityId: null, trailId: null, routeId: null, trailName: null, guide: null, startedAtUtc: null, segments: [] };
 
 /**
  * The active recording. Persisted on every change so a crash or the OS killing the app mid-hike
@@ -36,12 +41,14 @@ export const useRecordingStore = create<RecordingState>()(
   persist(
     (set, get) => ({
       ...initial,
-      start: (trail) =>
+      start: (follow) =>
         set({
           status: 'recording',
           activityId: Crypto.randomUUID(),
-          trailId: trail?.id ?? null,
-          trailName: trail?.name ?? null,
+          trailId: follow?.trail?.id ?? null,
+          routeId: follow?.route?.id ?? null,
+          trailName: follow?.trail?.name ?? follow?.route?.name ?? null,
+          guide: follow?.route?.guide ?? null,
           startedAtUtc: new Date().toISOString(),
           segments: [[]],
         }),
@@ -60,13 +67,13 @@ export const useRecordingStore = create<RecordingState>()(
         });
       },
       finish: (name, notes) => {
-        const { activityId, trailId, segments } = get();
+        const { activityId, trailId, routeId, segments } = get();
         const nonEmpty = segments.filter((s) => s.length > 0);
         if (!activityId || nonEmpty.reduce((n, s) => n + s.length, 0) < 2) {
           set(initial);
           return null;
         }
-        useSyncStore.getState().enqueue({ id: activityId, name, trailId, notes: notes ?? null, segments: nonEmpty });
+        useSyncStore.getState().enqueue({ id: activityId, name, trailId, routeId, notes: notes ?? null, segments: nonEmpty });
         set(initial);
         return activityId;
       },

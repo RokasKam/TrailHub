@@ -45,7 +45,8 @@ internal sealed class GetActivityHandler(IActivityRepository activities, ICurren
             a.AverageSpeedMetersPerSecond,
             GeoBounds.From(points),
             a.Segments.Select(s => (IReadOnlyList<TrackPointDto>)s.Points.Select(p => new TrackPointDto(p.Latitude, p.Longitude, p.Elevation, p.TimestampUtc)).ToList()).ToList(),
-            ElevationProfile.Build(a.Segments.Select(s => (IReadOnlyList<GeoPoint>)s.Points.Select(p => p.ToGeoPoint()).ToList()).ToList()));
+            ElevationProfile.Build(a.Segments.Select(s => (IReadOnlyList<GeoPoint>)s.Points.Select(p => p.ToGeoPoint()).ToList()).ToList()),
+            a.RouteId);
     }
 }
 

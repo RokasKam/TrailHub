@@ -30,13 +30,28 @@ public interface IGeocoder
     Task<Result<IReadOnlyList<Place>>> SearchAsync(string text, GeoPoint? near, CancellationToken cancellationToken);
 }
 
-public sealed record RouteSummary(Guid Id, string Name, double DistanceMeters, double AscentMeters, int DurationMinutes, int DayCount, bool Snapped, double StartLatitude, double StartLongitude, DateTime UpdatedAtUtc);
+/// <param name="IsOwner">False for routes other people shared with one of your groups.</param>
+public sealed record RouteSummary(
+    Guid Id,
+    string Name,
+    double DistanceMeters,
+    double AscentMeters,
+    int DurationMinutes,
+    int DayCount,
+    bool Snapped,
+    double StartLatitude,
+    double StartLongitude,
+    DateTime UpdatedAtUtc,
+    string OwnerId,
+    bool IsOwner,
+    bool Published);
 
 public interface IRouteRepository
 {
     Task<PlannedRoute?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<RouteSummary>> GetSummariesByOwnerAsync(string ownerId, CancellationToken cancellationToken);
+    /// <summary>The user's own routes and routes shared with any of <paramref name="groupIds"/>.</summary>
+    Task<IReadOnlyList<RouteSummary>> GetSummariesVisibleToAsync(string userId, IReadOnlyCollection<Guid> groupIds, CancellationToken cancellationToken);
 
     void Add(PlannedRoute route);
 

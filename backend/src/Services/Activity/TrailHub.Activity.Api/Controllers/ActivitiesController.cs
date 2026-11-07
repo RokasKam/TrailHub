@@ -61,7 +61,7 @@ public sealed class ActivitiesController : ApiController
         RecordActivityRequest body,
         [FromServices] ICommandHandler<RecordActivityCommand, ActivitySummaryDto> handler,
         CancellationToken ct) =>
-        FromResult(await handler.Handle(new RecordActivityCommand(id, body.Name, body.TrailId, body.Segments, body.Notes), ct));
+        FromResult(await handler.Handle(new RecordActivityCommand(id, body.Name, body.TrailId, body.Segments, body.Notes, body.RouteId), ct));
 
     /// <summary>Renames a hike or edits its notes.</summary>
     [HttpPatch("{id:guid}")]
@@ -99,7 +99,8 @@ public sealed class ActivitiesController : ApiController
 /// <param name="TrailId">The trail this hike followed, if any.</param>
 /// <param name="Segments">Track points per recording segment (a pause ends a segment).</param>
 /// <param name="Notes">Optional notes.</param>
-public sealed record RecordActivityRequest(string Name, Guid? TrailId, IReadOnlyList<IReadOnlyList<TrackPointDto>> Segments, string? Notes);
+/// <param name="RouteId">The planned route this hike followed, if any.</param>
+public sealed record RecordActivityRequest(string Name, Guid? TrailId, IReadOnlyList<IReadOnlyList<TrackPointDto>> Segments, string? Notes, Guid? RouteId = null);
 
 public sealed record UpdateActivityRequest(string Name, string? Notes);
 

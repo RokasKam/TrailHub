@@ -11,6 +11,7 @@ export type PendingActivity = {
   id: string;
   name: string;
   trailId: string | null;
+  routeId?: string | null;
   notes: string | null;
   segments: TrackPoint[][];
   attempts?: number;
@@ -49,7 +50,7 @@ export const useSyncStore = create<SyncState>()(
             try {
               await api<ActivitySummary>(`/api/activities/${item.id}`, {
                 method: 'PUT',
-                body: { name: item.name, trailId: item.trailId, notes: item.notes, segments: item.segments },
+                body: { name: item.name, trailId: item.trailId, routeId: item.routeId ?? null, notes: item.notes, segments: item.segments },
               });
               get().remove(item.id);
             } catch (error) {

@@ -54,6 +54,7 @@ type TripChange =
   | { kind: 'removeTrail'; day: number; trailId: string }
   | { kind: 'updateDay'; day: number; notes: string | null; overnight: string | null }
   | { kind: 'share'; groupId: string | null }
+  | { kind: 'attachRoute'; routeId: string | null }
   | { kind: 'addItem'; text: string; itemKind: ChecklistItemKind }
   | { kind: 'toggleItem'; itemId: string; isDone: boolean }
   | { kind: 'claimItem'; itemId: string; claim: boolean }
@@ -76,6 +77,8 @@ export function useTripChange(id: string) {
           return api<Trip>(`${base}/days/${change.day}/trails/${change.trailId}`, { method: 'DELETE' });
         case 'updateDay':
           return api<Trip>(`${base}/days/${change.day}`, { method: 'PUT', body: { notes: change.notes, overnight: change.overnight } });
+        case 'attachRoute':
+          return api<Trip>(`${base}/route`, { method: 'PUT', body: { routeId: change.routeId } });
         case 'share':
           return api<Trip>(`${base}/group`, { method: 'PUT', body: { groupId: change.groupId } });
         case 'addItem':

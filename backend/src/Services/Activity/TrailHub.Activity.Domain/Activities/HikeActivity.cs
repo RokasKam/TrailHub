@@ -42,6 +42,9 @@ public sealed class HikeActivity : AggregateRoot<Guid>
 
     public Guid? TrailId { get; private set; }
 
+    /// <summary>The planned route (Routes service) followed, if the hike was started from one.</summary>
+    public Guid? RouteId { get; private set; }
+
     public ActivitySource Source { get; private set; }
 
     public IReadOnlyList<ActivitySegment> Segments { get; private set; } = [];
@@ -141,6 +144,8 @@ public sealed class HikeActivity : AggregateRoot<Guid>
         activity.CalculateMetrics();
         return activity;
     }
+
+    public void FollowedRoute(Guid? routeId) => RouteId = routeId;
 
     public Result UpdateDetails(string name, string? notes)
     {

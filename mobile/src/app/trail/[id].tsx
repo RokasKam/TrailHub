@@ -58,7 +58,7 @@ export default function TrailScreen() {
 
   const startHike = () => {
     if (recordingStatus !== 'idle') return Alert.alert('Already recording', 'Finish your current hike first.');
-    startRecording({ id: t.id, name: t.name });
+    startRecording({ trail: { id: t.id, name: t.name } });
     router.navigate('/record');
   };
 

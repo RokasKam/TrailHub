@@ -10,7 +10,11 @@ namespace TrailHub.Routes.Application.Routes;
 /// <param name="Overnight">Where the day ends; null on the last day.</param>
 public sealed record RouteDayDto(int Day, double StartDistanceMeters, TrackStats Stats, RouteWaypoint? Overnight);
 
+/// <summary>A group the route is shared with.</summary>
+public sealed record RouteGroupDto(Guid Id, string Name);
+
 /// <param name="Id">Null for a preview that hasn't been saved.</param>
+/// <param name="IsOwner">Whether the viewer can edit, share and publish it; group members can only view, follow and copy.</param>
 /// <param name="Path">The routed line as <c>[latitude, longitude, elevation]</c> triples (elevation may be null).</param>
 /// <param name="Snapped">False when the line is straight between waypoints because no hiking path was found or routing is off.</param>
 public sealed record RouteDto(
@@ -24,7 +28,10 @@ public sealed record RouteDto(
     IReadOnlyList<RouteDayDto> Days,
     bool Snapped,
     IReadOnlyList<string> Warnings,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc,
+    bool IsOwner = true,
+    IReadOnlyList<RouteGroupDto>? SharedWith = null,
+    DateTime? PublishedAtUtc = null);
 
 public sealed record WaypointInput(double Latitude, double Longitude, string? Name = null, bool IsOvernight = false, PoiKind? Kind = null)
 {
@@ -33,8 +40,13 @@ public sealed record WaypointInput(double Latitude, double Longitude, string? Na
 
 internal static class RouteViews
 {
-    public static RouteDto ToDto(this PlannedRoute route) =>
-        Build(route.Id, route.Name, route.Description, route.Waypoints, route.ToTrack(), route.WaypointIndices, route.Snapped, [], route.UpdatedAtUtc);
+    public static RouteDto ToDto(this PlannedRoute route, string viewerId, IReadOnlyList<GroupInfo> sharedWith) =>
+        Build(route.Id, route.Name, route.Description, route.Waypoints, route.ToTrack(), route.WaypointIndices, route.Snapped, [], route.UpdatedAtUtc) with
+        {
+            IsOwner = route.OwnerId == viewerId,
+            SharedWith = sharedWith.Select(g => new RouteGroupDto(g.Id, g.Name)).ToList(),
+            PublishedAtUtc = route.PublishedAtUtc,
+        };
 
     public static RouteDto Preview(IReadOnlyList<RouteWaypoint> waypoints, RoutedTrack routed, IReadOnlyList<string>? warnings = null) =>
         Build(null, null, null, waypoints, routed.Track, routed.WaypointIndices, routed.Snapped, warnings ?? [], null);
@@ -64,6 +76,33 @@ internal static class RouteViews
             snapped,
             allWarnings,
             updatedAtUtc);
+    }
+}
+
+internal static class RouteAccess
+{
+    /// <summary>
+    /// A route the user may see: their own, or one shared with a group they're in. Anything else is reported as
+    /// missing so ids can't be probed. Also returns the groups it's shared with (that still exist), for the DTO.
+    /// </summary>
+    public static async Task<(PlannedRoute Route, IReadOnlyList<GroupInfo> SharedWith)?> LoadVisibleAsync(
+        this IRouteRepository routes, IGroupDirectory directory, Guid routeId, string userId, CancellationToken cancellationToken)
+    {
+        if (await routes.GetByIdAsync(routeId, cancellationToken) is not { } route)
+        {
+            return null;
+        }
+
+        var groups = new List<GroupInfo>();
+        foreach (var groupId in route.SharedWithGroups)
+        {
+            if (await directory.GetAsync(groupId, cancellationToken) is { } group)
+            {
+                groups.Add(group);
+            }
+        }
+
+        return route.OwnerId == userId || groups.Any(g => g.IsMember(userId)) ? (route, groups) : null;
     }
 }
 
@@ -99,7 +138,7 @@ internal sealed class PreviewRouteHandler(IRouter router) : IQueryHandler<Previe
 public sealed record SaveRouteCommand(Guid? RouteId, string Name, string? Description, IReadOnlyList<WaypointInput> Waypoints) : ICommand<RouteDto>;
 
 /// <summary>Creates a route (<c>RouteId = null</c>) or replaces one of the caller's routes, routing the waypoints again.</summary>
-internal sealed class SaveRouteHandler(IRouter router, IRouteRepository routes, IUnitOfWork unitOfWork, ICurrentUser user, TimeProvider clock)
+internal sealed class SaveRouteHandler(IRouter router, IRouteRepository routes, IGroupDirectory directory, IUnitOfWork unitOfWork, ICurrentUser user, TimeProvider clock)
     : ICommandHandler<SaveRouteCommand, RouteDto>
 {
     public async Task<Result<RouteDto>> Handle(SaveRouteCommand command, CancellationToken cancellationToken)
@@ -139,7 +178,9 @@ internal sealed class SaveRouteHandler(IRouter router, IRouteRepository routes, 
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return existing.ToDto();
+        return await routes.LoadVisibleAsync(directory, existing.Id, user.UserId, cancellationToken) is (PlannedRoute saved, var groups)
+            ? saved.ToDto(user.UserId, groups)
+            : existing.ToDto(user.UserId, []);
     }
 }
 
@@ -163,33 +204,35 @@ internal sealed class DeleteRouteHandler(IRouteRepository routes, IUnitOfWork un
 
 public sealed record GetRouteQuery(Guid RouteId) : IQuery<RouteDto>;
 
-internal sealed class GetRouteHandler(IRouteRepository routes, ICurrentUser user) : IQueryHandler<GetRouteQuery, RouteDto>
+internal sealed class GetRouteHandler(IRouteRepository routes, IGroupDirectory directory, ICurrentUser user) : IQueryHandler<GetRouteQuery, RouteDto>
 {
-    public async Task<Result<RouteDto>> Handle(GetRouteQuery query, CancellationToken cancellationToken)
-    {
-        var route = await routes.GetByIdAsync(query.RouteId, cancellationToken);
-        return route is null || route.OwnerId != user.UserId ? RouteErrors.NotFound : route.ToDto();
-    }
+    public async Task<Result<RouteDto>> Handle(GetRouteQuery query, CancellationToken cancellationToken) =>
+        await routes.LoadVisibleAsync(directory, query.RouteId, user.UserId, cancellationToken) is (PlannedRoute route, var groups)
+            ? route.ToDto(user.UserId, groups)
+            : RouteErrors.NotFound;
 }
 
 public sealed record GetMyRoutesQuery : IQuery<IReadOnlyList<RouteSummary>>;
 
-internal sealed class GetMyRoutesHandler(IRouteRepository routes, ICurrentUser user) : IQueryHandler<GetMyRoutesQuery, IReadOnlyList<RouteSummary>>
+/// <summary>The caller's routes and routes shared with their groups.</summary>
+internal sealed class GetMyRoutesHandler(IRouteRepository routes, IGroupDirectory directory, ICurrentUser user) : IQueryHandler<GetMyRoutesQuery, IReadOnlyList<RouteSummary>>
 {
-    public async Task<Result<IReadOnlyList<RouteSummary>>> Handle(GetMyRoutesQuery query, CancellationToken cancellationToken) =>
-        Result<IReadOnlyList<RouteSummary>>.Success(await routes.GetSummariesByOwnerAsync(user.UserId, cancellationToken));
+    public async Task<Result<IReadOnlyList<RouteSummary>>> Handle(GetMyRoutesQuery query, CancellationToken cancellationToken)
+    {
+        var groups = await directory.GetForMemberAsync(user.UserId, cancellationToken);
+        return Result<IReadOnlyList<RouteSummary>>.Success(await routes.GetSummariesVisibleToAsync(user.UserId, groups.Select(g => g.Id).ToList(), cancellationToken));
+    }
 }
 
 /// <summary>GPX with the routed track, every waypoint (overnight stops marked), and optionally water, huts etc. along the way.</summary>
 public sealed record ExportRouteGpxQuery(Guid RouteId, bool IncludePois) : IQuery<(string FileName, string Gpx)>;
 
-internal sealed class ExportRouteGpxHandler(IRouteRepository routes, IPoiSource pois, IGpxSerializer gpx, ICurrentUser user)
+internal sealed class ExportRouteGpxHandler(IRouteRepository routes, IGroupDirectory directory, IPoiSource pois, IGpxSerializer gpx, ICurrentUser user)
     : IQueryHandler<ExportRouteGpxQuery, (string FileName, string Gpx)>
 {
     public async Task<Result<(string FileName, string Gpx)>> Handle(ExportRouteGpxQuery query, CancellationToken cancellationToken)
     {
-        var route = await routes.GetByIdAsync(query.RouteId, cancellationToken);
-        if (route is null || route.OwnerId != user.UserId)
+        if (await routes.LoadVisibleAsync(directory, query.RouteId, user.UserId, cancellationToken) is not (PlannedRoute route, _))
         {
             return RouteErrors.NotFound;
         }

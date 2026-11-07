@@ -4,16 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { useUnits } from '@/api/profile';
-import { approxMeters, downloadRouteGpx, useAlternatives, useDeleteRoute, usePoisAlong, useRoute, useRoutePreview, useSaveRoute } from '@/api/routes';
+import { useGroups } from '@/api/planning';
+import { approxMeters, downloadRouteGpx, useAlternatives, useCopyRoute, useDeleteRoute, usePoisAlong, usePublishRoute, useRoute, useRoutePreview, useSaveRoute, useShareRoute } from '@/api/routes';
+import { HikeRoute } from '@/components/route-hike';
 import { Itinerary, POI_LABELS, RouteElevation, RouteStats, RouteWarnings } from '@/components/route-summary';
 import { ThemedText } from '@/components/themed-text';
 import { TrailMap, type MapMarker } from '@/components/trail-map';
-import { Button, Card, Chip, IconButton, Input, List, ListRow, QueryState, Screen, Section } from '@/components/ui';
+import { Button, Card, Chip, Icon, IconButton, Input, List, ListRow, QueryState, Screen, Section, Segmented } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { describeError } from '@/lib/api';
 import { formatDistance, formatElevation, formatMinutes } from '@/lib/format';
 import { shareTextFile } from '@/lib/share-file';
-import type { Bounds, PlannedRoute, Poi, PoiKind, RouteWaypoint } from '@/lib/types';
+import type { Bounds, PlanDifficulty, PlannedRoute, Poi, PoiKind, RouteWaypoint } from '@/lib/types';
 
 /** Where to centre an empty map when we don't know where the user is: Chamonix. */
 const FALLBACK_CENTER = { latitude: 45.9237, longitude: 6.8694 };
@@ -96,6 +98,7 @@ export default function RouteEditorScreen() {
   const save = useSaveRoute(id);
   const remove = useDeleteRoute();
   const findAlternatives = useAlternatives();
+  const copy = useCopyRoute();
 
   // Edits live here until saved; until the first edit, the saved route is shown. Each edit pushes the previous
   // waypoints onto `history`, so undo steps back through moves, removals and overnight changes, not just added points.
@@ -123,6 +126,8 @@ export default function RouteEditorScreen() {
   }, [id]);
 
   if (id && !saved.data) return <Screen><QueryState isLoading={saved.isLoading} error={saved.error} onRetry={() => saved.refetch()} /></Screen>;
+  // Someone shared this route with your group: you can view, follow, export and copy it, not change it.
+  const readOnly = !!id && saved.data?.isOwner === false;
 
   // With unsaved changes, back asks first (and swipe-back is off, so it can't skip the question).
   const dirty = edited !== null || (name !== null && name !== (saved.data?.name ?? ''));
@@ -214,7 +219,7 @@ export default function RouteEditorScreen() {
           gestureEnabled: !dirty,
           headerBackVisible: !dirty,
           headerLeft: dirty ? () => <IconButton icon="chevron.left" label="Back" onPress={back} /> : undefined,
-          headerRight: () => (history.length > 0 ? <IconButton icon="arrow.uturn.backward" label="Undo" onPress={undo} /> : null),
+          headerRight: () => (history.length > 0 && !readOnly ? <IconButton icon="arrow.uturn.backward" label="Undo" onPress={undo} /> : null),
         }}
       />
 
@@ -222,7 +227,8 @@ export default function RouteEditorScreen() {
         height={400}
         lines={route ? [route.path.map(([latitude, longitude]) => ({ latitude, longitude }))] : []}
         variants={alternatives.slice(1).map((a, i) => ({ id: `alt-${i}`, color: ALTERNATIVE_COLORS[i + 1], coordinates: a.path.map(([latitude, longitude]) => ({ latitude, longitude })) }))}
-        draggableMarkers={markers}
+        markers={readOnly ? markers : []}
+        draggableMarkers={readOnly ? [] : markers}
         onMarkerDragEnd={(markerId, c) => {
           const i = Number(markerId.slice(3));
           // A dragged point is a new place: drop any hut name it had, keep whether the night is spent there.
@@ -233,13 +239,30 @@ export default function RouteEditorScreen() {
         center={initialCenter ?? undefined}
         zoom={12}
         showUser
-        onMapPress={(c) => insert({ ...c, isOvernight: false })}
+        onMapPress={readOnly ? undefined : (c) => insert({ ...c, isOvernight: false })}
         onMarkerPress={(markerId) => {
+          if (readOnly) return;
           if (markerId.startsWith('wp-')) waypointActions(Number(markerId.slice(3)));
           const poi = poiList.find((p) => `poi-${p.id}` === markerId);
           if (poi) poiActions(poi);
         }}
       />
+      {readOnly ? (
+        <Card style={styles.inline}>
+          <Icon name="person.3.fill" size={16} color="#2563EB" />
+          <ThemedText type="small" style={{ flex: 1 }}>
+            Shared with {saved.data?.sharedWith?.map((g) => g.name).join(', ') || 'your group'}. Copy it to change it.
+          </ThemedText>
+          <Button
+            size="small"
+            variant="tinted"
+            icon="doc.on.doc"
+            label="Copy"
+            loading={copy.isPending}
+            onPress={() => copy.mutate(id!, { onSuccess: (r) => router.replace(`/routes/${r.id}`), onError: (e) => Alert.alert("Couldn't copy", describeError(e)) })}
+          />
+        </Card>
+      ) : (
       <ThemedText type="small" themeColor="textSecondary">
         {waypoints.length === 0
           ? 'Tap the map to place your start.'
@@ -249,6 +272,7 @@ export default function RouteEditorScreen() {
               ? 'Routing…'
               : 'Tap to add points, hold and drag a point to move it, tap it for options, or tap a hut to stay the night.'}
       </ThemedText>
+      )}
       {preview.error && <ThemedText type="small" style={{ color: '#DC2626' }}>{describeError(preview.error)}</ThemedText>}
 
       <View style={styles.chips}>
@@ -268,7 +292,13 @@ export default function RouteEditorScreen() {
           <RouteWarnings warnings={route.warnings} />
           <RouteStats route={route} units={units} />
 
-          {waypoints.length === 2 && (
+          {id && edited === null && (
+            <Section title="Hike it">
+              <HikeRoute route={route} units={units} />
+            </Section>
+          )}
+
+          {waypoints.length === 2 && !readOnly && (
             <Section title="Other ways">
               {alternatives.length === 0 ? (
                 <Button
@@ -304,7 +334,20 @@ export default function RouteEditorScreen() {
         </>
       )}
 
-      {waypoints.length >= 2 && (
+      {id && !readOnly && saved.data && edited === null && (
+        <>
+          <ShareRoute route={saved.data} />
+          <PublishRoute route={saved.data} />
+        </>
+      )}
+
+      {readOnly && (
+        <List>
+          <ListRow icon="square.and.arrow.up" iconColor="#64748B" title="Export GPX" onPress={exportGpx} />
+        </List>
+      )}
+
+      {waypoints.length >= 2 && !readOnly && (
         <Section title={id ? 'Route' : 'Save'}>
           <Card>
             <Input icon="pencil" placeholder="Route name, e.g. Lac Blanc loop" value={routeName} onChangeText={setName} returnKeyType="done" />
@@ -320,7 +363,7 @@ export default function RouteEditorScreen() {
         </Section>
       )}
 
-      {id && (
+      {id && !readOnly && (
         <List>
           <ListRow
             title="Delete route"
@@ -342,7 +385,102 @@ export default function RouteEditorScreen() {
   );
 }
 
+/** Which of your groups can see, follow and copy this route. */
+function ShareRoute({ route }: { route: PlannedRoute }) {
+  const groups = useGroups();
+  const share = useShareRoute(route.id!);
+  const shared = new Set(route.sharedWith?.map((g) => g.id));
+  if (!groups.data?.length) return null;
+  return (
+    <Section title="Share with a group">
+      <Card>
+        <View style={styles.chips}>
+          {groups.data.map((g) => (
+            <Chip
+              key={g.id}
+              icon={shared.has(g.id) ? 'checkmark' : 'person.3'}
+              label={g.name}
+              selected={shared.has(g.id)}
+              onPress={() => share.mutate({ groupId: g.id, share: !shared.has(g.id) }, { onError: (e) => Alert.alert("Couldn't share", describeError(e)) })}
+            />
+          ))}
+        </View>
+        <ThemedText type="small" themeColor="textSecondary">
+          Members can see the route, follow it on a hike, export it and copy it. Only you can change it.
+        </ThemedText>
+      </Card>
+    </Section>
+  );
+}
+
+const DIFFICULTIES: PlanDifficulty[] = ['Easy', 'Moderate', 'Hard', 'Expert'];
+
+/** Publishes the route to Discover as a public trail; published again, it updates that trail. */
+function PublishRoute({ route }: { route: PlannedRoute }) {
+  const publish = usePublishRoute(route.id!);
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(route.name ?? '');
+  const [description, setDescription] = useState(route.description ?? '');
+  const [region, setRegion] = useState('');
+  const [difficulty, setDifficulty] = useState<PlanDifficulty>(route.stats.maxSacScale >= 4 ? 'Hard' : route.stats.durationMinutes > 360 ? 'Hard' : 'Moderate');
+  const blocker = !route.snapped ? 'Only routes that follow paths can be published.' : route.stats.distanceMeters < 1000 ? 'Routes shorter than 1 km can’t be published.' : null;
+
+  return (
+    <Section title="Discover">
+      <Card>
+        {route.publishedAtUtc ? (
+          <View style={styles.inline}>
+            <Icon name="globe.europe.africa.fill" size={16} color="#1F7A4D" />
+            <ThemedText type="small" style={{ flex: 1 }}>
+              Published {new Date(route.publishedAtUtc).toLocaleDateString()}. Edits here don’t change the public trail until you publish again.
+            </ThemedText>
+          </View>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            Publish this route as a public trail so other hikers can find it in Discover, review it and add photos.
+          </ThemedText>
+        )}
+        {blocker ? (
+          <ThemedText type="small" themeColor="textSecondary">{blocker}</ThemedText>
+        ) : open ? (
+          <>
+            <Input icon="textformat" placeholder="Trail name" value={title} onChangeText={setTitle} />
+            <Input icon="mappin.and.ellipse" placeholder="Region, e.g. Chamonix valley" value={region} onChangeText={setRegion} />
+            <Input placeholder="Description (optional)" value={description} onChangeText={setDescription} multiline />
+            <Segmented value={difficulty} onChange={setDifficulty} options={DIFFICULTIES.map((d) => ({ value: d, label: d }))} />
+            <Button
+              icon="globe"
+              label={route.publishedAtUtc ? 'Publish again' : 'Publish to Discover'}
+              loading={publish.isPending}
+              disabled={!title.trim() || !region.trim()}
+              onPress={() =>
+                publish.mutate(
+                  { name: title.trim(), description: description.trim() || null, region: region.trim(), difficulty },
+                  { onSuccess: () => setOpen(false), onError: (e) => Alert.alert("Couldn't publish", describeError(e)) },
+                )
+              }
+            />
+          </>
+        ) : (
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Button icon="globe" variant="tinted" label={route.publishedAtUtc ? 'Publish again' : 'Publish'} onPress={() => setOpen(true)} />
+            </View>
+            {route.publishedAtUtc && (
+              <View style={{ flex: 1 }}>
+                <Button icon="map" variant="secondary" label="View trail" onPress={() => router.push(`/trail/${route.id}`)} />
+              </View>
+            )}
+          </View>
+        )}
+      </Card>
+    </Section>
+  );
+}
+
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  row: { flexDirection: 'row', gap: Spacing.two },
 });
 

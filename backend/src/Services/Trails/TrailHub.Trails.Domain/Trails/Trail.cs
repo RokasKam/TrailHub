@@ -76,7 +76,8 @@ public sealed class Trail : AggregateRoot<Guid>
         Difficulty difficulty,
         IReadOnlyList<GeoPoint> route,
         string createdBy,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        Guid? id = null)
     {
         if (ValidateDetails(name, description, region) is { } error)
         {
@@ -95,7 +96,7 @@ public sealed class Trail : AggregateRoot<Guid>
 
         var trail = new Trail
         {
-            Id = Guid.CreateVersion7(),
+            Id = id ?? Guid.CreateVersion7(),
             Name = name.Trim(),
             Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             Region = region.Trim(),
@@ -123,6 +124,28 @@ public sealed class Trail : AggregateRoot<Guid>
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         Region = region.Trim();
         Difficulty = difficulty;
+        return Result.Success();
+    }
+
+    /// <summary>Replaces the line, e.g. when the planned route a trail was published from is published again.</summary>
+    public Result ReplaceRoute(IReadOnlyList<GeoPoint> route, string userId)
+    {
+        if (userId != CreatedBy)
+        {
+            return TrailErrors.NotOwner;
+        }
+
+        if (route.Count < 2)
+        {
+            return TrailErrors.RouteTooShort;
+        }
+
+        if (route.Count > MaxRoutePoints)
+        {
+            return TrailErrors.RouteTooLong;
+        }
+
+        SetRoute(route);
         return Result.Success();
     }
 

@@ -38,8 +38,9 @@ async function startTrackingOrWarn() {
 export default function RecordScreen() {
   const units = useUnits();
   const theme = useTheme();
-  const { status, segments, trailId, trailName, startedAtUtc, start, pause, resume, finish, discard } = useRecordingStore();
-  const guide = useTrailRoute(status === 'idle' ? null : trailId).data?.points; // cached with the trail, so it works offline
+  const { status, segments, trailId, trailName, guide: routeGuide, startedAtUtc, start, pause, resume, finish, discard } = useRecordingStore();
+  const trailGuide = useTrailRoute(status === 'idle' ? null : trailId).data?.points; // cached with the trail, so it works offline
+  const guide = routeGuide ?? trailGuide;
   const now = useNow(status === 'recording');
   const [name, setName] = useState('');
   const [finishing, setFinishing] = useState(false);
@@ -138,7 +139,17 @@ export default function RecordScreen() {
             </ThemedText>
           </View>
 
-          <TrailMap lines={segments} guide={guide} showUser followUser height={280} center={last} zoom={15} />
+          {/* Until the first GPS fix, show the whole route to follow instead of the globe. */}
+          <TrailMap
+            lines={segments}
+            guide={guide}
+            showUser
+            followUser={!!last || !guide?.length}
+            bounds={!last && guide?.length ? guideBounds(guide) : undefined}
+            height={280}
+            center={last}
+            zoom={15}
+          />
 
           <Card>
             <StatRow>
@@ -245,3 +256,9 @@ const styles = StyleSheet.create({
   live: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginBottom: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
 });
+
+function guideBounds(points: { latitude: number; longitude: number }[]) {
+  const lats = points.map((p) => p.latitude);
+  const lons = points.map((p) => p.longitude);
+  return { minLatitude: Math.min(...lats), minLongitude: Math.min(...lons), maxLatitude: Math.max(...lats), maxLongitude: Math.max(...lons) };
+}

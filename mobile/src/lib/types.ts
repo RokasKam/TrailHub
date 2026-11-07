@@ -76,6 +76,8 @@ export type ActivityDetails = ActivitySummary & {
   elapsedDurationSeconds: number;
   bounds: Bounds;
   segments: TrackPoint[][];
+  /** The planned route the hike followed, if it was started from one. */
+  routeId: string | null;
   elevationProfile: ElevationSample[];
 };
 
@@ -186,6 +188,8 @@ export type Trip = {
   groupName: string | null;
   /** The group's members and how many personal items each has packed; empty for private trips. */
   members: TripMember[];
+  /** A planned route for the whole trip; its day N is the trip's day N. */
+  routeId: string | null;
 };
 
 export type GroupRole = 'Owner' | 'Member';
@@ -252,6 +256,11 @@ export type PlannedRoute = {
   snapped: boolean;
   warnings: string[];
   updatedAtUtc: string | null;
+  /** False when someone shared it with your group: you can follow and copy it, not change it. */
+  isOwner: boolean;
+  sharedWith: { id: string; name: string }[] | null;
+  /** Set once published to Discover (as a trail with the same id). */
+  publishedAtUtc: string | null;
 };
 export type RouteSummary = {
   id: string;
@@ -264,6 +273,9 @@ export type RouteSummary = {
   startLatitude: number;
   startLongitude: number;
   updatedAtUtc: string;
+  ownerId: string;
+  isOwner: boolean;
+  published: boolean;
 };
 export type Poi = { id: string; name: string; kind: PoiKind; latitude: number; longitude: number; elevation: number | null };
 export type Place = { name: string; region: string | null; latitude: number; longitude: number };

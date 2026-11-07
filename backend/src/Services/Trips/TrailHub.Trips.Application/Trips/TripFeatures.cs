@@ -50,7 +50,8 @@ public sealed record TripDto(
     bool IsOwner,
     Guid? GroupId,
     string? GroupName,
-    IReadOnlyList<TripMemberDto> Members);
+    IReadOnlyList<TripMemberDto> Members,
+    Guid? RouteId);
 
 /// <param name="SharedUnclaimed">Group gear nobody has said they'll bring yet.</param>
 public sealed record TripSummaryDto(
@@ -102,7 +103,8 @@ internal static class TripMappings
                     .Select(m => new TripMemberDto(m.UserId, m.DisplayName, m.UserId == t.OwnerId, personal.Count(i => i.DoneBy.Contains(m.UserId))))
                     .OrderByDescending(m => m.IsOwner)
                     .ThenBy(m => m.DisplayName)
-                    .ToList());
+                    .ToList(),
+            t.RouteId);
     }
 
     public static TripSummaryDto ToSummary(this Trip t, string viewerId, GroupInfo? group) => new(
@@ -282,6 +284,12 @@ public sealed record RemoveChecklistItemCommand(Guid TripId, Guid ItemId) : Trip
     internal override bool OwnerOnly => false;
 
     internal override Result Apply(Trip trip, string actorId) => trip.RemoveChecklistItem(actorId, ItemId);
+}
+
+/// <summary>Attaches a planned route to the trip (or detaches it with null). The route's days line up with the trip's days.</summary>
+public sealed record AttachRouteCommand(Guid TripId, Guid? RouteId) : TripChange(TripId)
+{
+    internal override Result Apply(Trip trip, string actorId) => trip.AttachRoute(RouteId);
 }
 
 public sealed record CompleteTripCommand(Guid TripId) : TripChange(TripId)

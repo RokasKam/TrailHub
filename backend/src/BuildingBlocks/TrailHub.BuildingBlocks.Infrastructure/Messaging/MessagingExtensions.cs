@@ -20,7 +20,9 @@ public static class MessagingExtensions
 
         services.AddMassTransit(bus =>
         {
-            bus.SetKebabCaseEndpointNameFormatter();
+            // Queue names include the consumer's namespace (which names the service). Without it, two services with a
+            // consumer of the same class name share one queue and each event reaches only one of them.
+            bus.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter(includeNamespace: true));
             configureConsumers?.Invoke(bus);
 
             if (string.IsNullOrWhiteSpace(host))

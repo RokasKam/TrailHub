@@ -111,6 +111,9 @@ public sealed class Trip : AggregateRoot<Guid>
     /// <summary>The group (in the Groups service) this trip is shared with, if any.</summary>
     public Guid? GroupId { get; private set; }
 
+    /// <summary>A planned route (in the Routes service) for the whole trip; its day N is the trip's day N.</summary>
+    public Guid? RouteId { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     public IReadOnlyList<TripDay> Days => _days;
@@ -228,6 +231,17 @@ public sealed class Trip : AggregateRoot<Guid>
         }
 
         day.Update(notes, overnight);
+        return Result.Success();
+    }
+
+    public Result AttachRoute(Guid? routeId)
+    {
+        if (EnsurePlanned() is { } notPlanned)
+        {
+            return notPlanned;
+        }
+
+        RouteId = routeId;
         return Result.Success();
     }
 

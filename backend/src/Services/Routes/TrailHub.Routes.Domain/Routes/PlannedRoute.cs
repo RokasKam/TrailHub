@@ -21,6 +21,7 @@ public sealed class PlannedRoute : AggregateRoot<Guid>
     public const int MaxTextLength = 4000;
     public const int MinWaypoints = 2;
     public const int MaxWaypoints = 50;
+    public const double MinPublishDistanceMeters = 1000;
 
     private List<RouteWaypoint> _waypoints = [];
     private List<GeoPoint> _points = [];
@@ -59,6 +60,12 @@ public sealed class PlannedRoute : AggregateRoot<Guid>
     public DateTime CreatedAtUtc { get; private set; }
 
     public DateTime UpdatedAtUtc { get; private set; }
+
+    /// <summary>Groups (in the Groups service) whose members can see, follow and copy this route.</summary>
+    public List<Guid> SharedWithGroups { get; private set; } = [];
+
+    /// <summary>When the route was last published to Discover, as a trail with the same id.</summary>
+    public DateTime? PublishedAtUtc { get; private set; }
 
     public int DayCount => _waypoints.Count(w => w.IsOvernight) + 1;
 
@@ -116,6 +123,42 @@ public sealed class PlannedRoute : AggregateRoot<Guid>
     }
 
     public Track ToTrack() => new(_points, SacScale);
+
+    public RoutedTrack ToRoutedTrack() => new(ToTrack(), WaypointIndices, Snapped);
+
+    /// <summary>Lets members of a group see the route. Checking that the owner is in the group is the caller's job.</summary>
+    public void ShareWithGroup(Guid groupId)
+    {
+        if (!SharedWithGroups.Contains(groupId))
+        {
+            SharedWithGroups.Add(groupId);
+        }
+    }
+
+    public void UnshareGroup(Guid groupId) => SharedWithGroups.Remove(groupId);
+
+    /// <summary>
+    /// Checks the route can go public: it has to follow real paths (not straight lines) and be at least
+    /// <see cref="MinPublishDistanceMeters"/> long, so Discover isn't filled with doodles.
+    /// </summary>
+    public Result MarkPublished(DateTime nowUtc)
+    {
+        if (!Snapped)
+        {
+            return RouteErrors.PublishNeedsPaths;
+        }
+
+        if (DistanceMeters < MinPublishDistanceMeters)
+        {
+            return RouteErrors.PublishTooShort;
+        }
+
+        PublishedAtUtc = nowUtc;
+        return Result.Success();
+    }
+
+    /// <summary>A copy of this route owned by someone else, e.g. a group member who wants to change it.</summary>
+    public PlannedRoute CopyFor(string ownerId, DateTime nowUtc) => Create(ownerId, Name, Description, Waypoints, ToRoutedTrack(), nowUtc).Value;
 
     /// <summary>The route's days: split at overnight waypoints. A route without any is a single day.</summary>
     public IReadOnlyList<(int FromIndex, int ToIndex, RouteWaypoint? Overnight)> Days() =>
@@ -180,5 +223,10 @@ public static class RouteErrors
     public static readonly Error RouterUnavailable = Error.Unavailable("Route.RouterUnavailable", "The route planner is unavailable right now. Try again in a minute.");
     public static readonly Error MapDataUnavailable = Error.Unavailable("Route.MapDataUnavailable", "Map data (huts, water, campsites) is unavailable right now. Try again in a few minutes.");
     public static readonly Error InvalidPlan = Error.Validation("Route.InvalidPlan", $"Plan 1 to {ItineraryOptions.MaxDays} days with a sensible daily distance.");
+    public static readonly Error NotOwner = Error.Forbidden("Route.NotOwner", "Only the route's author can do that.");
+    public static readonly Error GroupNotFound = Error.NotFound("Route.GroupNotFound", "That group doesn't exist or you're not in it.");
+    public static readonly Error PublishNeedsPaths = Error.Validation("Route.PublishNeedsPaths", "Only routes that follow paths can be published. This one is drawn as straight lines.");
+    public static readonly Error PublishTooShort = Error.Validation("Route.PublishTooShort", "A route must be at least 1 km long to publish.");
+    public static readonly Error InvalidPublishDetails = Error.Validation("Route.InvalidPublishDetails", "Give the trail a name and a region.");
     public static readonly Error PlaceNotFound = Error.NotFound("Route.PlaceNotFound", "No place matches that search.");
 }

@@ -9,10 +9,13 @@ import { Card, Icon, List, ListRow, PageHeader, QueryState, Screen, Section } fr
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDistance, formatElevation, formatMinutes } from '@/lib/format';
+import type { RouteSummary, Units } from '@/lib/types';
 
 export default function PlanScreen() {
   const units = useUnits();
   const routes = useRoutes();
+  const mine = routes.data?.filter((r) => r.isOwner) ?? [];
+  const shared = routes.data?.filter((r) => !r.isOwner) ?? [];
 
   return (
     <Screen tabBar>
@@ -40,31 +43,44 @@ export default function PlanScreen() {
           isLoading={routes.isLoading}
           error={routes.error}
           hasData={!!routes.data?.length}
-          empty={routes.data?.length === 0}
+          empty={mine.length === 0}
           emptyText="Routes you draw or plan show up here."
           emptyIcon="point.topleft.down.to.point.bottomright.curvepath"
           onRetry={() => routes.refetch()}
         />
-        {!!routes.data?.length && (
-          <List>
-            {routes.data.map((r) => (
-              <ListRow
-                key={r.id}
-                icon={r.dayCount > 1 ? 'calendar' : 'point.topleft.down.to.point.bottomright.curvepath'}
-                iconColor={r.dayCount > 1 ? '#7C3AED' : '#1F7A4D'}
-                title={r.name}
-                detail={[
-                  formatDistance(r.distanceMeters, units),
-                  `↑ ${formatElevation(r.ascentMeters, units)}`,
-                  r.dayCount > 1 ? `${r.dayCount} days` : formatMinutes(r.durationMinutes),
-                ].join(' · ')}
-                onPress={() => router.push(`/routes/${r.id}`)}
-              />
-            ))}
-          </List>
-        )}
+        {mine.length > 0 && <RouteList routes={mine} units={units} />}
       </Section>
+
+      {shared.length > 0 && (
+        <Section title="Shared by your groups">
+          <RouteList routes={shared} units={units} />
+        </Section>
+      )}
     </Screen>
+  );
+}
+
+function RouteList({ routes, units }: { routes: RouteSummary[]; units: Units }) {
+  return (
+    <List>
+      {routes.map((r) => (
+        <ListRow
+          key={r.id}
+          icon={!r.isOwner ? 'person.3.fill' : r.dayCount > 1 ? 'calendar' : 'point.topleft.down.to.point.bottomright.curvepath'}
+          iconColor={!r.isOwner ? '#2563EB' : r.dayCount > 1 ? '#7C3AED' : '#1F7A4D'}
+          title={r.name}
+          detail={[
+            formatDistance(r.distanceMeters, units),
+            `↑ ${formatElevation(r.ascentMeters, units)}`,
+            r.dayCount > 1 ? `${r.dayCount} days` : formatMinutes(r.durationMinutes),
+            r.published ? 'in Discover' : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          onPress={() => router.push(`/routes/${r.id}`)}
+        />
+      ))}
+    </List>
   );
 }
 

@@ -54,6 +54,61 @@ export function useDeleteRoute() {
   });
 }
 
+/** Shares a route with a group, or stops sharing it. */
+export function shareRouteWithGroup(routeId: string, groupId: string, share = true) {
+  return api<PlannedRoute>(`/api/routes/${routeId}/groups/${groupId}`, { method: share ? 'PUT' : 'DELETE' });
+}
+
+export function useShareRoute(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, share }: { groupId: string; share: boolean }) => shareRouteWithGroup(id, groupId, share),
+    onSuccess: (route) => qc.setQueryData(routeKeys.detail(id), route),
+  });
+}
+
+/** Copies a route shared with you into your own routes. */
+export function useCopyRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<PlannedRoute>(`/api/routes/${id}/copy`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: routeKeys.all, exact: true }),
+  });
+}
+
+export type PublishRequest = { name: string; description: string | null; region: string; difficulty: PlanDifficulty };
+
+/** Publishes the route to Discover as a trail with the same id (or updates it). */
+export function usePublishRoute(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PublishRequest) => api<PlannedRoute>(`/api/routes/${id}/publish`, { method: 'POST', body }),
+    onSuccess: (route) => {
+      qc.setQueryData(routeKeys.detail(id), route);
+      void qc.invalidateQueries({ queryKey: routeKeys.all, exact: true });
+      void qc.invalidateQueries({ queryKey: ['trails'] });
+    },
+  });
+}
+
+/**
+ * The stretch of a route walked on one day (1-based), or the whole route without `day`, as map coordinates.
+ * Days are split by distance along the line, matching the route's itinerary.
+ */
+export function routeGuide(route: PlannedRoute, day?: number) {
+  const all = route.path.map(([latitude, longitude]) => ({ latitude, longitude }));
+  if (!day || route.days.length < 2) return all;
+  const from = route.days[day - 1]?.startDistanceMeters ?? 0;
+  const to = route.days[day]?.startDistanceMeters ?? Infinity;
+  const out: { latitude: number; longitude: number }[] = [];
+  let distance = 0;
+  route.path.forEach((p, i) => {
+    if (i > 0) distance += approxMeters(route.path[i - 1], p);
+    if (distance >= from - 1 && distance <= to + 1) out.push(all[i]);
+  });
+  return out.length >= 2 ? out : all;
+}
+
 export function useAlternatives() {
   return useMutation({
     mutationFn: ({ from, to }: { from: RouteWaypoint; to: RouteWaypoint }) => api<PlannedRoute[]>('/api/routes/alternatives', { method: 'POST', body: { from, to } }),

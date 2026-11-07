@@ -58,7 +58,8 @@ public sealed record ActivityDetailsDto(
     double AverageSpeedMetersPerSecond,
     GeoBounds Bounds,
     IReadOnlyList<IReadOnlyList<TrackPointDto>> Segments,
-    IReadOnlyList<ElevationSample> ElevationProfile);
+    IReadOnlyList<ElevationSample> ElevationProfile,
+    Guid? RouteId);
 
 public sealed record MonthlyStatisticsDto(int Year, int Month, int Hikes, double DistanceMeters, double ElevationGainMeters);
 

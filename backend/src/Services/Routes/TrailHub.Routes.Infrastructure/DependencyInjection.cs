@@ -9,6 +9,7 @@ using Microsoft.Extensions.Http.Resilience;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Domain.Geo;
 using TrailHub.BuildingBlocks.Infrastructure;
+using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.BuildingBlocks.Infrastructure.Persistence;
 using TrailHub.Routes.Application.Routes;
 using TrailHub.Routes.Domain.Routes;
@@ -55,6 +56,8 @@ public sealed class RoutesDbContext(DbContextOptions<RoutesDbContext> options) :
 
     public DbSet<PlannedRoute> Routes => Set<PlannedRoute>();
 
+    internal DbSet<KnownGroup> KnownGroups => Set<KnownGroup>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("routes");
@@ -90,6 +93,23 @@ public sealed class RoutesDbContext(DbContextOptions<RoutesDbContext> options) :
 
         route.Property(r => r.SacScale);
         route.Property(r => r.WaypointIndices);
+        route.Property(r => r.SharedWithGroups); // uuid[]
+        route.HasIndex(r => r.SharedWithGroups).HasMethod("gin"); // "shared with any of my groups" lookups
+
+        var group = modelBuilder.Entity<KnownGroup>();
+        group.ToTable("KnownGroups");
+        group.HasKey(g => g.Id);
+        group.Property(g => g.Id).ValueGeneratedNever();
+        group.Property(g => g.Name).HasMaxLength(100).IsRequired();
+        group.OwnsMany(g => g.Members, member =>
+        {
+            member.ToTable("KnownGroupMembers");
+            member.WithOwner().HasForeignKey("GroupId");
+            member.HasKey("GroupId", nameof(KnownGroupMember.UserId));
+            member.Property(m => m.UserId).HasMaxLength(128);
+            member.Property(m => m.DisplayName).HasMaxLength(100).IsRequired();
+            member.HasIndex(m => m.UserId);
+        });
     }
 
     private static ValueComparer<T> JsonComparer<T>()
@@ -104,16 +124,29 @@ internal sealed class RouteRepository(RoutesDbContext db) : IRouteRepository
     public Task<PlannedRoute?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.Routes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-    public async Task<IReadOnlyList<RouteSummary>> GetSummariesByOwnerAsync(string ownerId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RouteSummary>> GetSummariesVisibleToAsync(string userId, IReadOnlyCollection<Guid> groupIds, CancellationToken cancellationToken)
     {
         // Skips the (large) routed line; waypoints are enough for the start point and day count.
         var rows = await db.Routes.AsNoTracking()
-            .Where(r => r.OwnerId == ownerId)
+            .Where(r => r.OwnerId == userId || r.SharedWithGroups.Any(g => groupIds.Contains(g)))
             .OrderByDescending(r => r.UpdatedAtUtc)
-            .Select(r => new { r.Id, r.Name, r.DistanceMeters, r.AscentMeters, r.DurationMinutes, r.Snapped, r.UpdatedAtUtc, Waypoints = EF.Property<List<RouteWaypoint>>(r, "_waypoints") })
+            .Select(r => new { r.Id, r.Name, r.OwnerId, r.DistanceMeters, r.AscentMeters, r.DurationMinutes, r.Snapped, r.UpdatedAtUtc, r.PublishedAtUtc, Waypoints = EF.Property<List<RouteWaypoint>>(r, "_waypoints") })
             .ToListAsync(cancellationToken);
         return rows
-            .Select(r => new RouteSummary(r.Id, r.Name, r.DistanceMeters, r.AscentMeters, r.DurationMinutes, r.Waypoints.Count(w => w.IsOvernight) + 1, r.Snapped, r.Waypoints[0].Latitude, r.Waypoints[0].Longitude, r.UpdatedAtUtc))
+            .Select(r => new RouteSummary(
+                r.Id,
+                r.Name,
+                r.DistanceMeters,
+                r.AscentMeters,
+                r.DurationMinutes,
+                r.Waypoints.Count(w => w.IsOvernight) + 1,
+                r.Snapped,
+                r.Waypoints[0].Latitude,
+                r.Waypoints[0].Longitude,
+                r.UpdatedAtUtc,
+                r.OwnerId,
+                r.OwnerId == userId,
+                r.PublishedAtUtc is not null))
             .ToList();
     }
 
@@ -132,6 +165,8 @@ public static class DependencyInjection
         services.AddDbContext<RoutesDbContext>(o => o.UseRoutesNpgsql(connectionString));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<RoutesDbContext>());
         services.AddScoped<IRouteRepository, RouteRepository>();
+        services.AddScoped<IGroupDirectory, GroupDirectory>();
+        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<GroupMembersChangedConsumer>());
         services.AddGpxSupport();
 
         if (configuration.GetConnectionString("Redis") is { Length: > 0 } redis)

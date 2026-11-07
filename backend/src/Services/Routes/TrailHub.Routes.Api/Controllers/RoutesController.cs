@@ -14,7 +14,8 @@ namespace TrailHub.Routes.Api.Controllers;
 /// <remarks>
 /// Routing uses OpenRouteService's hiking profile when <c>Routing:OpenRouteService:ApiKey</c> is set; otherwise
 /// routes are straight lines (<c>snapped: false</c>). Places to sleep, water and viewpoints come from OpenStreetMap.
-/// Saved routes are private: another user's route id returns 404.
+/// A saved route is private until its author shares it with a group: members can then see it, follow it, export it and
+/// copy it, but only the author can change, share or publish it. A route you can't see returns 404.
 /// </remarks>
 [Route("api/routes")]
 public sealed class RoutesController : ApiController
@@ -58,7 +59,7 @@ public sealed class RoutesController : ApiController
     public async Task<ActionResult<IReadOnlyList<Place>>> Places([FromQuery] string q, [FromQuery] double? lat, [FromQuery] double? lon, [FromServices] IQueryHandler<SearchPlacesQuery, IReadOnlyList<Place>> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new SearchPlacesQuery(q, lat, lon), ct));
 
-    /// <summary>The caller's saved routes, most recently changed first.</summary>
+    /// <summary>The caller's saved routes and routes shared with their groups (<c>isOwner: false</c>), most recently changed first.</summary>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<RouteSummary>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<RouteSummary>>> List([FromServices] IQueryHandler<GetMyRoutesQuery, IReadOnlyList<RouteSummary>> handler, CancellationToken ct) =>
@@ -92,6 +93,38 @@ public sealed class RoutesController : ApiController
     public async Task<IActionResult> Delete(Guid id, [FromServices] ICommandHandler<DeleteRouteCommand> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new DeleteRouteCommand(id), ct));
 
+    /// <summary>Shares the route with one of your groups. Members can see, follow, export and copy it.</summary>
+    [HttpPut("{id:guid}/groups/{groupId:guid}")]
+    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RouteDto>> Share(Guid id, Guid groupId, [FromServices] ICommandHandler<ShareRouteCommand, RouteDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new ShareRouteCommand(id, groupId, true), ct));
+
+    /// <summary>Stops sharing the route with a group.</summary>
+    [HttpDelete("{id:guid}/groups/{groupId:guid}")]
+    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<RouteDto>> Unshare(Guid id, Guid groupId, [FromServices] ICommandHandler<ShareRouteCommand, RouteDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new ShareRouteCommand(id, groupId, false), ct));
+
+    /// <summary>Copies a route you can see (e.g. one shared with your group) into your own routes.</summary>
+    [HttpPost("{id:guid}/copy")]
+    [ProducesResponseType<RouteDto>(StatusCodes.Status201Created)]
+    public async Task<ActionResult<RouteDto>> Copy(Guid id, [FromServices] ICommandHandler<CopyRouteCommand, RouteDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new CopyRouteCommand(id), ct), route => CreatedAtAction(nameof(Get), new { id = route.Id }, route));
+
+    /// <summary>
+    /// Publishes the route to Discover as a public trail with the same id (or updates it when published again).
+    /// Needs a route that follows paths and is at least 1 km long. Author only.
+    /// </summary>
+    /// <remarks>The trail appears in Discover a moment later: the Trails service creates it from an event.</remarks>
+    [HttpPost("{id:guid}/publish")]
+    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<RouteDto>> Publish(Guid id, PublishRouteRequest body, [FromServices] ICommandHandler<PublishRouteCommand, RouteDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new PublishRouteCommand(id, body.Name, body.Description, body.Region, body.Difficulty), ct));
+
     /// <summary>
     /// The route as GPX: the track (one segment per day), every waypoint with overnight stops marked, and with
     /// <c>pois=true</c> the water, huts, campsites and viewpoints along it.
@@ -114,3 +147,5 @@ public sealed record WaypointsRequest(IReadOnlyList<WaypointInput> Waypoints);
 public sealed record AlternativesRequest(WaypointInput From, WaypointInput To);
 
 public sealed record SaveRouteRequest(string Name, string? Description, IReadOnlyList<WaypointInput> Waypoints);
+
+public sealed record PublishRouteRequest(string Name, string? Description, string Region, PlanDifficulty Difficulty);

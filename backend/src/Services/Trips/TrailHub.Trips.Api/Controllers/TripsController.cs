@@ -53,6 +53,13 @@ public sealed class TripsController : ApiController
     public async Task<ActionResult<TripDto>> Share(Guid id, TripGroupRequest body, [FromServices] ICommandHandler<ShareTripCommand, TripDto> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new ShareTripCommand(id, body.GroupId), ct));
 
+    /// <summary>Attaches a planned route (from the Routes service) to the trip, or detaches it with <c>routeId: null</c>. Owner only.</summary>
+    /// <remarks>The route's day N is shown with the trip's day N. To let a group see it, share the route with the same group.</remarks>
+    [HttpPut("{id:guid}/route")]
+    [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
+    public Task<ActionResult<TripDto>> AttachRoute(Guid id, TripRouteRequest body, [FromServices] ICommandHandler<AttachRouteCommand, TripDto> handler, CancellationToken ct) =>
+        Send(handler, new AttachRouteCommand(id, body.RouteId), ct);
+
     /// <summary>Renames the trip or edits its description.</summary>
     [HttpPut("{id:guid}")]
     [ProducesResponseType<TripDto>(StatusCodes.Status200OK)]
@@ -137,5 +144,7 @@ public sealed record ChecklistItemRequest(string Text, ChecklistItemKind? Kind);
 public sealed record ChecklistClaimRequest(bool Claim);
 
 public sealed record TripGroupRequest(Guid? GroupId);
+
+public sealed record TripRouteRequest(Guid? RouteId);
 
 public sealed record ChecklistDoneRequest(bool IsDone);

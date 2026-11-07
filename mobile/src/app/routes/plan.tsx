@@ -82,12 +82,15 @@ export default function PlannerScreen() {
       { onSuccess: (r) => router.push(`/routes/${r.id}`), onError: (e) => Alert.alert("Couldn't save", describeError(e)) },
     );
 
-  // A trip with one day per stage: each day's overnight stop and a note with its distance, climbing and time.
+  // Saves the route, then makes a trip with one day per stage and the route attached, so each trip day shows its
+  // stage and can be started from the trip. Days also get the overnight stop and a note, readable without the route.
   const toTrip = async (r: PlannedRoute) => {
     setBusy(true);
     try {
+      const saved = await saveRoute.mutateAsync({ name: routeName, waypoints: r.waypoints });
       const end = new Date(tripStart.getTime() + (r.days.length - 1) * DAY_MS);
       const trip = await createTrip.mutateAsync({ name: routeName, startDate: toDateOnly(tripStart), endDate: toDateOnly(end) });
+      await api<Trip>(`/api/trips/${trip.id}/route`, { method: 'PUT', body: { routeId: saved.id } });
       for (const d of r.days) {
         const note = `${formatDistance(d.stats.distanceMeters, units)} · ↑ ${Math.round(d.stats.ascentMeters)} m · ~${Math.round(d.stats.durationMinutes / 60)} h walking`;
         await api<Trip>(`/api/trips/${trip.id}/days/${d.day}`, { method: 'PUT', body: { notes: note, overnight: d.overnight?.name ?? null } });
@@ -263,7 +266,7 @@ export default function PlannerScreen() {
               <DateField label="First day" value={tripStart} onChange={setTripStart} minimumDate={new Date()} />
               <Button icon="calendar.badge.plus" label="Create trip from this" variant="secondary" onPress={() => void toTrip(result)} loading={busy} />
               <ThemedText type="small" themeColor="textSecondary">
-                The trip gets one day per stage with the overnight stop and the day&apos;s distance. Share it with a group to split the gear.
+                Saves the route and makes a trip with one day per stage, each with its overnight stop and a Start button. Share the trip with a group and they get the route too.
               </ThemedText>
             </Card>
           </Section>
