@@ -48,6 +48,9 @@ internal sealed class PublishRouteAsTrailHandler(ITrailRepository trails, IUnitO
             {
                 return replaced;
             }
+
+            // Publishing again undoes the author's own unpublish; a trail hidden after reports stays hidden.
+            existing.Unhide(HiddenBy.Author);
         }
         else
         {

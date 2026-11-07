@@ -28,6 +28,9 @@ public sealed record Place(string Name, string? Region, double Latitude, double 
 public interface IGeocoder
 {
     Task<Result<IReadOnlyList<Place>>> SearchAsync(string text, GeoPoint? near, CancellationToken cancellationToken);
+
+    /// <summary>A short name for a point: the hut or other place of interest there, else the village or town.</summary>
+    Task<Place?> ReverseAsync(GeoPoint point, CancellationToken cancellationToken);
 }
 
 /// <param name="IsOwner">False for routes other people shared with one of your groups.</param>

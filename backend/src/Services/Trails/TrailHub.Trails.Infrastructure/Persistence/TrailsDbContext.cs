@@ -25,6 +25,8 @@ public sealed class TrailsDbContext(DbContextOptions<TrailsDbContext> options) :
 
     public DbSet<Review> Reviews => Set<Review>();
 
+    public DbSet<TrailReport> TrailReports => Set<TrailReport>();
+
     public DbSet<ConditionReport> ConditionReports => Set<ConditionReport>();
 
     public DbSet<FavoriteTrail> Favorites => Set<FavoriteTrail>();

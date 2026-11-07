@@ -34,6 +34,15 @@ export function useRoutePreview(waypoints: RouteWaypoint[], enabled = true) {
   });
 }
 
+/** "Chamonix → Argentière" from the start and finish, for routes saved without a name. */
+export async function suggestRouteName(waypoints: RouteWaypoint[]) {
+  try {
+    return (await api<{ name: string }>('/api/routes/suggest-name', { method: 'POST', body: { waypoints } })).name;
+  } catch {
+    return null;
+  }
+}
+
 export function useSaveRoute(id: string | null) {
   const qc = useQueryClient();
   return useMutation({
@@ -83,6 +92,18 @@ export function usePublishRoute(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PublishRequest) => api<PlannedRoute>(`/api/routes/${id}/publish`, { method: 'POST', body }),
+    onSuccess: (route) => {
+      qc.setQueryData(routeKeys.detail(id), route);
+      void qc.invalidateQueries({ queryKey: routeKeys.all, exact: true });
+      void qc.invalidateQueries({ queryKey: ['trails'] });
+    },
+  });
+}
+
+export function useUnpublishRoute(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<PlannedRoute>(`/api/routes/${id}/unpublish`, { method: 'POST' }),
     onSuccess: (route) => {
       qc.setQueryData(routeKeys.detail(id), route);
       void qc.invalidateQueries({ queryKey: routeKeys.all, exact: true });

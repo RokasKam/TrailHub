@@ -6,11 +6,20 @@ using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.Trails.Application.Abstractions;
+using TrailHub.Trails.Application.Community;
 using TrailHub.Trails.Application.Trails;
 using TrailHub.Trails.Infrastructure.Persistence;
 using TrailHub.Trails.Infrastructure.Photos;
 
 namespace TrailHub.Trails.Infrastructure;
+
+/// <summary>Moderators are listed in configuration (<c>Moderation:ModeratorUserIds</c>, Auth0 user ids).</summary>
+internal sealed class ConfiguredModerators(IReadOnlyCollection<string> userIds) : IModerators
+{
+    private readonly HashSet<string> _ids = [.. userIds.Where(id => !string.IsNullOrWhiteSpace(id))];
+
+    public bool IsModerator(string userId) => _ids.Contains(userId);
+}
 
 public static class DependencyInjection
 {
@@ -28,7 +37,13 @@ public static class DependencyInjection
 
         services.AddSingleton<IPhotoStorage, S3PhotoStorage>();
         services.AddGpxSupport();
-        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<Messaging.RoutePublishedConsumer>());
+        services.AddScoped<ITrailReportRepository, TrailReportRepository>();
+        services.AddSingleton<IModerators>(new ConfiguredModerators(configuration.GetSection("Moderation:ModeratorUserIds").Get<string[]>() ?? []));
+        services.AddTrailHubMessaging(configuration, bus =>
+        {
+            bus.AddConsumer<Messaging.RoutePublishedConsumer>();
+            bus.AddConsumer<Messaging.RouteUnpublishedConsumer>();
+        });
         services.AddHealthChecks().AddDbContextCheck<TrailsDbContext>("trails-db", tags: ["ready"]);
         return services;
     }

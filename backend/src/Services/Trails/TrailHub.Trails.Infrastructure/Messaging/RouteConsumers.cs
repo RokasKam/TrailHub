@@ -2,6 +2,7 @@ using MassTransit;
 using Microsoft.Extensions.Logging;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.Contracts;
+using TrailHub.Trails.Application.Community;
 using TrailHub.Trails.Application.Trails;
 using TrailHub.Trails.Domain.Trails;
 
@@ -25,4 +26,10 @@ internal sealed class RoutePublishedConsumer(ICommandHandler<PublishRouteAsTrail
             logger.LogWarning("Couldn't publish route {RouteId} as a trail: {Error}", e.RouteId, result.Error!.Message);
         }
     }
+}
+
+internal sealed class RouteUnpublishedConsumer(ICommandHandler<UnpublishTrailCommand> handler) : IConsumer<RouteUnpublishedIntegrationEvent>
+{
+    public Task Consume(ConsumeContext<RouteUnpublishedIntegrationEvent> context) =>
+        handler.Handle(new UnpublishTrailCommand(context.Message.RouteId, context.Message.OwnerId, context.Message.UnpublishedAtUtc), context.CancellationToken);
 }

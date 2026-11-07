@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
@@ -13,6 +14,7 @@ import { Button, Card, Chip, Icon, IconButton, Input, List, ListRow, Screen, Sec
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, describeError } from '@/lib/api';
+import { usePlannerStore } from '@/stores/planner-store';
 import { formatDistance } from '@/lib/format';
 import type { Accommodation, Bounds, Place, PlanDifficulty, PlannedRoute, Trip } from '@/lib/types';
 
@@ -47,18 +49,20 @@ export default function PlannerScreen() {
   const saveRoute = useSaveRoute(null);
   const createTrip = useCreateTrip();
 
-  const [start, setStart] = useState<Place | null>(null);
-  const [finish, setFinish] = useState<Place | null>(null);
-  const [via, setVia] = useState<Place[]>([]);
+  const { start, finish, via, days, maxDaily, accommodation, difficulty, result, set } = usePlannerStore();
+  const setStart = (p: Place | null) => set({ start: p, result: null });
+  const setFinish = (p: Place | null) => set({ finish: p, result: null });
+  const setVia = (v: Place[]) => set({ via: v, result: null });
+  const setDays = (d: number) => set({ days: d });
+  const setMaxDaily = (km: number | null) => set({ maxDaily: km });
+  const setAccommodation = (a: Accommodation) => set({ accommodation: a });
+  const setDifficulty = (d: PlanDifficulty) => set({ difficulty: d });
   const [picking, setPicking] = useState<PickTarget>(null);
-  const [days, setDays] = useState(4);
-  const [maxDaily, setMaxDaily] = useState<number | null>(20);
-  const [accommodation, setAccommodation] = useState<Accommodation>('Hut');
-  const [difficulty, setDifficulty] = useState<PlanDifficulty>('Moderate');
+  const here = useCurrentPosition();
+  const elapsed = useElapsedSeconds(plan.isPending);
   const [tripStart, setTripStart] = useState(() => new Date(Date.now() + 14 * DAY_MS));
   const [busy, setBusy] = useState(false);
 
-  const result = plan.data;
   const ready = start && finish;
 
   const generate = () =>
@@ -71,7 +75,7 @@ export default function PlannerScreen() {
       maxDailyDistanceKm: maxDaily,
       accommodation,
       difficulty,
-    });
+    }, { onSuccess: (r) => set({ result: r }) });
 
   const routeName = `${start?.name ?? 'Start'} → ${finish?.name ?? 'Finish'}`;
 
@@ -122,8 +126,8 @@ export default function PlannerScreen() {
     <Screen>
       <Section title="Where">
         <Card>
-          <PlaceField label="Start" icon="flag.fill" color="#16A34A" value={start} onChange={setStart} picking={picking === 'start'} onPick={() => setPicking(picking === 'start' ? null : 'start')} near={finish} />
-          <PlaceField label="Finish" icon="flag.checkered" color="#DC2626" value={finish} onChange={setFinish} picking={picking === 'finish'} onPick={() => setPicking(picking === 'finish' ? null : 'finish')} near={start} />
+          <PlaceField label="Start" icon="flag.fill" color="#16A34A" value={start} onChange={setStart} picking={picking === 'start'} onPick={() => setPicking(picking === 'start' ? null : 'start')} near={finish ?? here} />
+          <PlaceField label="Finish" icon="flag.checkered" color="#DC2626" value={finish} onChange={setFinish} picking={picking === 'finish'} onPick={() => setPicking(picking === 'finish' ? null : 'finish')} near={start ?? here} />
         </Card>
 
         <Card>
@@ -157,7 +161,7 @@ export default function PlannerScreen() {
               onChange={(p) => p && setVia([...via, p])}
               picking={picking === 'via'}
               onPick={() => setPicking(picking === 'via' ? null : 'via')}
-              near={via[via.length - 1] ?? start}
+              near={via[via.length - 1] ?? start ?? here}
             />
           )}
         </Card>
@@ -246,11 +250,7 @@ export default function PlannerScreen() {
       </Section>
 
       <Button size="large" icon="sparkles" label={result ? 'Plan again' : 'Plan my hike'} onPress={generate} loading={plan.isPending} disabled={!ready} />
-      {plan.isPending && (
-        <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-          Finding paths and places to stay. Long routes can take half a minute.
-        </ThemedText>
-      )}
+      {plan.isPending && <PlanProgress seconds={elapsed} />}
       {plan.error && <ThemedText type="small" style={{ color: theme.danger }}>{describeError(plan.error)}</ThemedText>}
 
       {result && (
@@ -273,6 +273,64 @@ export default function PlannerScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** Last known position, to rank place search results near you before a start is picked. */
+function useCurrentPosition() {
+  const [here, setHere] = useState<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    void Location.getLastKnownPositionAsync()
+      .then((p) => p && setHere({ latitude: p.coords.latitude, longitude: p.coords.longitude }))
+      .catch(() => undefined);
+  }, []);
+  return here;
+}
+
+function useElapsedSeconds(running: boolean) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => {
+      clearInterval(timer);
+      setSeconds(0);
+    };
+  }, [running]);
+  return seconds;
+}
+
+// The server doesn't report progress, so this shows its steps in order with typical timings: honest about what's
+// happening, without pretending to know exactly where it is.
+const PLAN_STEPS = [
+  { from: 0, label: 'Finding paths between your places' },
+  { from: 4, label: 'Looking up huts, campsites and hotels nearby' },
+  { from: 8, label: 'Choosing where to stop each night' },
+  { from: 11, label: 'Routing each day to its overnight stop' },
+];
+
+function PlanProgress({ seconds }: { seconds: number }) {
+  const theme = useTheme();
+  const current = PLAN_STEPS.filter((s) => seconds >= s.from).length - 1;
+  return (
+    <Card>
+      {PLAN_STEPS.map((s, i) => (
+        <View key={s.label} style={styles.row}>
+          <Icon
+            name={i < current ? 'checkmark.circle.fill' : i === current ? 'circle.dotted' : 'circle'}
+            size={16}
+            color={i < current ? theme.accent : i === current ? theme.text : theme.textSecondary}
+          />
+          <ThemedText type="small" themeColor={i <= current ? 'text' : 'textSecondary'} style={{ flex: 1 }}>
+            {s.label}
+          </ThemedText>
+        </View>
+      ))}
+      <ThemedText type="small" themeColor="textSecondary">
+        {seconds}s · long routes can take half a minute
+      </ThemedText>
+    </Card>
   );
 }
 
@@ -301,7 +359,7 @@ function PlaceField({
   onChange: (p: Place | null) => void;
   picking: boolean;
   onPick: () => void;
-  near: Place | null;
+  near: { latitude: number; longitude: number } | null;
 }) {
   const [text, setText] = useState('');
   const query = useDebounced(text);

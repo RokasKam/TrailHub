@@ -59,6 +59,15 @@ public sealed class RoutesController : ApiController
     public async Task<ActionResult<IReadOnlyList<Place>>> Places([FromQuery] string q, [FromQuery] double? lat, [FromQuery] double? lon, [FromServices] IQueryHandler<SearchPlacesQuery, IReadOnlyList<Place>> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new SearchPlacesQuery(q, lat, lon), ct));
 
+    /// <summary>Suggests a name for a route from its start and finish (huts, villages or towns).</summary>
+    [HttpPost("suggest-name")]
+    [ProducesResponseType<RouteNameResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<RouteNameResponse>> SuggestName(WaypointsRequest body, [FromServices] IQueryHandler<SuggestRouteNameQuery, string> handler, CancellationToken ct)
+    {
+        var result = await handler.Handle(new SuggestRouteNameQuery(body.Waypoints), ct);
+        return result.IsSuccess ? new RouteNameResponse(result.Value) : ProblemFor(result.Error!);
+    }
+
     /// <summary>The caller's saved routes and routes shared with their groups (<c>isOwner: false</c>), most recently changed first.</summary>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<RouteSummary>>(StatusCodes.Status200OK)]
@@ -125,6 +134,13 @@ public sealed class RoutesController : ApiController
     public async Task<ActionResult<RouteDto>> Publish(Guid id, PublishRouteRequest body, [FromServices] ICommandHandler<PublishRouteCommand, RouteDto> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new PublishRouteCommand(id, body.Name, body.Description, body.Region, body.Difficulty), ct));
 
+    /// <summary>Takes the route's trail out of Discover. Its reviews and photos are kept for when it's published again.</summary>
+    [HttpPost("{id:guid}/unpublish")]
+    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<RouteDto>> Unpublish(Guid id, [FromServices] ICommandHandler<UnpublishRouteCommand, RouteDto> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new UnpublishRouteCommand(id), ct));
+
     /// <summary>
     /// The route as GPX: the track (one segment per day), every waypoint with overnight stops marked, and with
     /// <c>pois=true</c> the water, huts, campsites and viewpoints along it.
@@ -149,3 +165,5 @@ public sealed record AlternativesRequest(WaypointInput From, WaypointInput To);
 public sealed record SaveRouteRequest(string Name, string? Description, IReadOnlyList<WaypointInput> Waypoints);
 
 public sealed record PublishRouteRequest(string Name, string? Description, string Region, PlanDifficulty Difficulty);
+
+public sealed record RouteNameResponse(string Name);

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.Trails.Application.Abstractions;
+using TrailHub.Trails.Application.Community;
 using TrailHub.Trails.Application.Trails;
 using TrailHub.Trails.Domain.Community;
 using TrailHub.Trails.Domain.Trails;
@@ -22,7 +23,7 @@ internal sealed class TrailRepository(TrailsDbContext db) : ITrailRepository
 
     public async Task<PagedResult<TrailSummaryDto>> SearchAsync(TrailSearchCriteria c, PageRequest page, CancellationToken cancellationToken)
     {
-        var query = db.Trails.AsNoTracking();
+        var query = db.Trails.AsNoTracking().Where(t => t.HiddenBy == null); // hidden trails are out of Discover
         Point? origin = c.NearLatitude is { } lat && c.NearLongitude is { } lon
             ? Geography.CreatePoint(new Coordinate(lon, lat))
             : null;
@@ -103,7 +104,7 @@ internal sealed class TrailRepository(TrailsDbContext db) : ITrailRepository
     }
 
     public async Task<IReadOnlyList<TrailSummaryDto>> GetSummariesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
-        await Project(db.Trails.AsNoTracking().Where(t => ids.Contains(t.Id)).OrderBy(t => t.Name), origin: null).ToListAsync(cancellationToken);
+        await Project(db.Trails.AsNoTracking().Where(t => ids.Contains(t.Id) && t.HiddenBy == null).OrderBy(t => t.Name), origin: null).ToListAsync(cancellationToken);
 
     private static IQueryable<TrailSummaryDto> Project(IQueryable<Trail> query, Point? origin) =>
         query.Select(t => new TrailSummaryDto(
@@ -173,4 +174,37 @@ internal sealed class FavoriteTrailRepository(TrailsDbContext db) : IFavoriteTra
     public void Add(FavoriteTrail favorite) => db.Favorites.Add(favorite);
 
     public void Remove(FavoriteTrail favorite) => db.Favorites.Remove(favorite);
+}
+
+internal sealed class TrailReportRepository(TrailsDbContext db) : ITrailReportRepository
+{
+    public Task<TrailReport?> GetByUserAsync(Guid trailId, string userId, CancellationToken cancellationToken) =>
+        db.TrailReports.FirstOrDefaultAsync(r => r.TrailId == trailId && r.UserId == userId, cancellationToken);
+
+    public Task<int> CountOpenAsync(Guid trailId, CancellationToken cancellationToken) =>
+        db.TrailReports.CountAsync(r => r.TrailId == trailId && r.ResolvedAtUtc == null, cancellationToken);
+
+    public async Task<IReadOnlyList<TrailReport>> GetOpenAsync(Guid trailId, CancellationToken cancellationToken) =>
+        await db.TrailReports.Where(r => r.TrailId == trailId && r.ResolvedAtUtc == null).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ModerationItemDto>> GetQueueAsync(CancellationToken cancellationToken)
+    {
+        var open = await db.TrailReports.AsNoTracking().Where(r => r.ResolvedAtUtc == null).ToListAsync(cancellationToken);
+        var reportedIds = open.Select(r => r.TrailId).Distinct().ToList();
+        var trails = await db.Trails.AsNoTracking()
+            .Where(t => reportedIds.Contains(t.Id) || t.HiddenBy == HiddenBy.Reports || t.HiddenBy == HiddenBy.Moderator)
+            .Select(t => new { t.Id, t.Name, t.Region, t.CreatedBy, t.HiddenBy })
+            .ToListAsync(cancellationToken);
+        return trails
+            .Select(t =>
+            {
+                var reports = open.Where(r => r.TrailId == t.Id).OrderByDescending(r => r.CreatedAtUtc).ToList();
+                return new ModerationItemDto(t.Id, t.Name, t.Region, t.CreatedBy, t.HiddenBy, reports.Count, reports.Select(r => new ModerationReportDto(r.Reason, r.Details, r.CreatedAtUtc)).ToList());
+            })
+            .OrderByDescending(i => i.OpenReports)
+            .ThenBy(i => i.Name)
+            .ToList();
+    }
+
+    public void Add(TrailReport report) => db.TrailReports.Add(report);
 }

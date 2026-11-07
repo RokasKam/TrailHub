@@ -305,3 +305,38 @@ internal sealed class SearchPlacesHandler(IGeocoder geocoder) : IQueryHandler<Se
         return geocoder.SearchAsync(query.Text.Trim(), near, cancellationToken);
     }
 }
+
+/// <summary>A name for an unnamed route: "Chamonix → Argentière", or "Loop from Chamonix" when it ends where it starts.</summary>
+public sealed record SuggestRouteNameQuery(IReadOnlyList<WaypointInput> Waypoints) : IQuery<string>;
+
+internal sealed class SuggestRouteNameHandler(IGeocoder geocoder) : IQueryHandler<SuggestRouteNameQuery, string>
+{
+    public async Task<Result<string>> Handle(SuggestRouteNameQuery query, CancellationToken cancellationToken)
+    {
+        if (query.Waypoints.Count < 2)
+        {
+            return RouteErrors.WaypointCount;
+        }
+
+        async Task<string?> NameOf(WaypointInput w) =>
+            w.Name ?? (await geocoder.ReverseAsync(new GeoPoint(w.Latitude, w.Longitude), cancellationToken))?.Name;
+
+        var (first, last) = (query.Waypoints[0], query.Waypoints[^1]);
+        var start = await NameOf(first);
+        var loop = RouteMetrics.HaversineMeters(new GeoPoint(first.Latitude, first.Longitude), new GeoPoint(last.Latitude, last.Longitude)) < 300;
+        if (loop)
+        {
+            return start is null ? "Loop" : $"Loop from {start}";
+        }
+
+        var end = await NameOf(last);
+        return (start, end) switch
+        {
+            (null, null) => "New route",
+            ({ } s, null) => $"From {s}",
+            (null, { } e) => $"To {e}",
+            var (s, e) when s == e => $"Around {s}",
+            var (s, e) => $"{s} → {e}",
+        };
+    }
+}

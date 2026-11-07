@@ -157,6 +157,8 @@ public sealed class PlannedRoute : AggregateRoot<Guid>
         return Result.Success();
     }
 
+    public void MarkUnpublished() => PublishedAtUtc = null;
+
     /// <summary>A copy of this route owned by someone else, e.g. a group member who wants to change it.</summary>
     public PlannedRoute CopyFor(string ownerId, DateTime nowUtc) => Create(ownerId, Name, Description, Waypoints, ToRoutedTrack(), nowUtc).Value;
 

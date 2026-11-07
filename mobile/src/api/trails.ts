@@ -5,6 +5,8 @@ import { File } from 'expo-file-system';
 import { api, apiFetch } from '@/lib/api';
 import type {
   ConditionReport,
+  ModerationItem,
+  ReportReason,
   Difficulty,
   ElevationSample,
   Paged,
@@ -148,4 +150,32 @@ export function useUploadTrailPhoto(id: string) {
 /** Raw GPX text, for saving/sharing a file. */
 export async function downloadTrailGpx(id: string) {
   return (await apiFetch(`/api/trails/${id}/gpx`)).text();
+}
+
+export function useReportTrail(id: string) {
+  return useMutation({
+    mutationFn: (body: { reason: ReportReason; details?: string | null }) => api<void>(`/api/trails/${id}/report`, { method: 'POST', body }),
+  });
+}
+
+/** The moderation queue; fails with 403 for everyone who isn't a moderator, which is how the app knows. */
+export function useModerationQueue() {
+  return useQuery({
+    queryKey: ['trails', 'moderation'],
+    queryFn: ({ signal }) => api<ModerationItem[]>('/api/trails/moderation', { signal }),
+    retry: false,
+    meta: { persist: false },
+  });
+}
+
+export function useModerateTrail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) => api<void>(`/api/trails/${id}/moderation`, { method: 'PUT', body: { hidden } }),
+    onSuccess: (_r, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['trails', 'moderation'] });
+      void qc.invalidateQueries({ queryKey: trailKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: ['trails', 'search'] });
+    },
+  });
 }

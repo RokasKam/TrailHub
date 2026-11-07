@@ -4,6 +4,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 
 import { routeGuide } from '@/api/routes';
 import { ThemedText } from '@/components/themed-text';
+import { SaveRouteOffline } from '@/components/offline-route';
 import { Button, Card, Chip } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { formatDistance, formatMinutes } from '@/lib/format';
@@ -51,6 +52,7 @@ export function HikeRoute({ route, units }: { route: PlannedRoute; units: Units 
         </ThemedText>
       )}
       <Button size="large" icon="figure.hiking" label={multiDay ? `Start day ${day}` : 'Start hike'} onPress={() => startHike(route, multiDay ? day : undefined)} />
+      {route.id && <SaveRouteOffline route={route} />}
     </Card>
   );
 }

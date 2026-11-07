@@ -75,7 +75,9 @@ public sealed record TrailDetailsDto(
     DateTime CreatedAtUtc,
     IReadOnlyList<PointOfInterestDto> PointsOfInterest,
     IReadOnlyList<TrailPhotoDto> Photos,
-    ConditionReportDto? LatestCondition);
+    ConditionReportDto? LatestCondition,
+    HiddenBy? HiddenBy,
+    bool ViewerIsModerator);
 
 public sealed record RoutePointDto(double Latitude, double Longitude, double? Elevation);
 

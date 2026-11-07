@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
 
 import { useAchievements, useProfile, useUpdatePreferences, useUpdateProfile } from '@/api/profile';
+import { useModerationQueue } from '@/api/trails';
 import { useSession } from '@/auth/session';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Icon, IconButton, Input, List, ListRow, QueryState, Screen, Section, Segmented, Stat, StatRow } from '@/components/ui';
@@ -18,6 +19,7 @@ export default function ProfileScreen() {
   const profile = useProfile();
   const achievements = useAchievements();
   const updatePreferences = useUpdatePreferences();
+  const moderation = useModerationQueue(); // 403 for non-moderators, so the row only shows for moderators
   const updateProfile = useUpdateProfile();
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -100,6 +102,15 @@ export default function ProfileScreen() {
       <List>
         <ListRow icon="map.fill" iconColor="#EA580C" title="Trips" detail="Multi-day plans and checklists" onPress={() => router.push('/trips')} />
         <ListRow icon="person.3.fill" iconColor="#2563EB" title="Groups" detail="Hike together, share your location" onPress={() => router.push('/groups')} />
+        {moderation.isSuccess && (
+          <ListRow
+            icon="checkmark.shield.fill"
+            iconColor="#7C3AED"
+            title="Moderation"
+            detail={moderation.data.length ? `${moderation.data.length} trail${moderation.data.length === 1 ? '' : 's'} to review` : 'Nothing to review'}
+            onPress={() => router.push('/moderation')}
+          />
+        )}
       </List>
 
       <Section

@@ -233,6 +233,64 @@ export async function downloadOfflineRegion(name: string, bounds: Bounds, styleU
 const PIN_DOT = 18;
 const PIN_HEIGHT = 36;
 
+/**
+ * Saves map tiles along a route for offline use. One box around a long route (say Chamonix → Zermatt) would be
+ * mostly tiles nowhere near the path, so the route is cut into ~8 km pieces and each gets its own small box.
+ * Packs are named `${name}-0`, `${name}-1`, …; progress is the average over all of them.
+ */
+export async function downloadOfflineRoute(name: string, path: { latitude: number; longitude: number }[], styleURL: string, onProgress: (percent: number) => void) {
+  const chunks = routeChunks(path);
+  const progress = chunks.map(() => 0);
+  const report = () => onProgress(Math.round(progress.reduce((a, b) => a + b, 0) / chunks.length));
+  await deleteOfflineRoute(name);
+  await Promise.all(
+    chunks.map((bounds, i) =>
+      downloadOfflineRegion(`${name}-${i}`, bounds, styleURL, (percent) => {
+        progress[i] = percent;
+        report();
+      }),
+    ),
+  );
+}
+
+/** Progress (0–100) of a saved route, or null if it was never saved. */
+export async function offlineRouteProgress(name: string): Promise<number | null> {
+  const packs = (await Mapbox.offlineManager.getPacks().catch(() => [])).filter((p) => p.name.startsWith(`${name}-`));
+  if (packs.length === 0) return null;
+  const statuses = await Promise.all(packs.map((p) => p.status()));
+  return Math.round(statuses.reduce((sum, s) => sum + (s.percentage ?? 0), 0) / statuses.length);
+}
+
+export async function deleteOfflineRoute(name: string) {
+  const packs = (await Mapbox.offlineManager.getPacks().catch(() => [])).filter((p) => p.name.startsWith(`${name}-`));
+  await Promise.all(packs.map((p) => Mapbox.offlineManager.deletePack(p.name)));
+}
+
+function routeChunks(path: { latitude: number; longitude: number }[], chunkMeters = 8000): Bounds[] {
+  const out: Bounds[] = [];
+  let start = 0;
+  let run = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const x = (((b.longitude - a.longitude) * Math.PI) / 180) * Math.cos((((a.latitude + b.latitude) / 2) * Math.PI) / 180);
+    const y = ((b.latitude - a.latitude) * Math.PI) / 180;
+    run += Math.sqrt(x * x + y * y) * 6_371_000;
+    if (run >= chunkMeters || i === path.length - 1) {
+      const piece = path.slice(start, i + 1);
+      out.push({
+        minLatitude: Math.min(...piece.map((p) => p.latitude)),
+        minLongitude: Math.min(...piece.map((p) => p.longitude)),
+        maxLatitude: Math.max(...piece.map((p) => p.latitude)),
+        maxLongitude: Math.max(...piece.map((p) => p.longitude)),
+      });
+      start = i;
+      run = 0;
+    }
+  }
+  return out;
+}
+
 const styles = StyleSheet.create({
   pin: { alignItems: 'center', width: 96, height: PIN_HEIGHT },
   pinDot: { width: PIN_DOT, height: PIN_DOT, borderRadius: PIN_DOT / 2, borderWidth: 3, borderColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.35)' },

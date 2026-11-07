@@ -18,7 +18,8 @@ internal sealed class MapboxGeocoder(HttpClient http, MapboxOptions options, ILo
 {
     public async Task<Result<IReadOnlyList<Place>>> SearchAsync(string text, GeoPoint? near, CancellationToken cancellationToken)
     {
-        var url = $"search/searchbox/v1/forward?q={Uri.EscapeDataString(text)}&limit=8&language=en&access_token={options.AccessToken}";
+        // auto_complete matches unfinished words, so results appear while the user is still typing.
+        var url = $"search/searchbox/v1/forward?q={Uri.EscapeDataString(text)}&limit=8&language=en&auto_complete=true&access_token={options.AccessToken}";
         if (near is not null)
         {
             url += string.Create(CultureInfo.InvariantCulture, $"&proximity={near.Longitude:F4},{near.Latitude:F4}");
@@ -40,13 +41,44 @@ internal sealed class MapboxGeocoder(HttpClient http, MapboxOptions options, ILo
         }
     }
 
+    public async Task<Place?> ReverseAsync(GeoPoint point, CancellationToken cancellationToken)
+    {
+        var url = string.Create(CultureInfo.InvariantCulture, $"search/searchbox/v1/reverse?longitude={point.Longitude:F5}&latitude={point.Latitude:F5}&language=en&limit=1&access_token={options.AccessToken}");
+        try
+        {
+            var response = await http.GetFromJsonAsync<FeatureCollection>(url, cancellationToken);
+            if (response?.Features is not [var f, ..])
+            {
+                return null;
+            }
+
+            // A hut or summit is a better name than the street address the lookup often returns.
+            var c = f.Properties.Context;
+            var name = f.Properties.FeatureType == "poi" ? f.Properties.Name : c?.Locality?.Name ?? c?.Place?.Name ?? f.Properties.Name;
+            return name is null ? null : new Place(name, c?.Region?.Name, point.Latitude, point.Longitude);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(e, "Mapbox reverse lookup failed");
+            return null;
+        }
+    }
+
     private sealed record FeatureCollection(IReadOnlyList<Feature>? Features);
 
     private sealed record Feature(Geometry Geometry, Properties Properties);
 
     private sealed record Geometry(double[] Coordinates);
 
-    private sealed record Properties(string? Name, [property: System.Text.Json.Serialization.JsonPropertyName("place_formatted")] string? PlaceFormatted);
+    private sealed record Properties(
+        string? Name,
+        [property: System.Text.Json.Serialization.JsonPropertyName("place_formatted")] string? PlaceFormatted,
+        [property: System.Text.Json.Serialization.JsonPropertyName("feature_type")] string? FeatureType,
+        Context? Context);
+
+    private sealed record Context(NamedPart? Locality, NamedPart? Place, NamedPart? Region);
+
+    private sealed record NamedPart(string? Name);
 }
 
 /// <summary>Mapbox first; Photon (OpenStreetMap, no key) when Mapbox isn't configured or fails.</summary>
@@ -61,4 +93,7 @@ internal sealed class FallbackGeocoder(MapboxGeocoder primary, PhotonGeocoder se
 
         return await secondary.SearchAsync(text, near, cancellationToken);
     }
+
+    public async Task<Place?> ReverseAsync(GeoPoint point, CancellationToken cancellationToken) =>
+        (options.Configured ? await primary.ReverseAsync(point, cancellationToken) : null) ?? await secondary.ReverseAsync(point, cancellationToken);
 }

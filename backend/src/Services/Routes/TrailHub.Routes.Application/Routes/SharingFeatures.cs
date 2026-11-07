@@ -114,3 +114,28 @@ internal sealed class PublishRouteHandler(IRouteRepository routes, IGroupDirecto
         return route.ToDto(user.UserId, groups);
     }
 }
+
+/// <summary>Takes the route's trail out of Discover. Publishing again brings it back (unless moderators hid it).</summary>
+public sealed record UnpublishRouteCommand(Guid RouteId) : ICommand<RouteDto>;
+
+internal sealed class UnpublishRouteHandler(IRouteRepository routes, IGroupDirectory directory, IUnitOfWork unitOfWork, IEventPublisher events, ICurrentUser user, TimeProvider clock)
+    : ICommandHandler<UnpublishRouteCommand, RouteDto>
+{
+    public async Task<Result<RouteDto>> Handle(UnpublishRouteCommand command, CancellationToken cancellationToken)
+    {
+        if (await routes.LoadVisibleAsync(directory, command.RouteId, user.UserId, cancellationToken) is not (PlannedRoute route, var groups))
+        {
+            return RouteErrors.NotFound;
+        }
+
+        if (route.OwnerId != user.UserId)
+        {
+            return RouteErrors.NotOwner;
+        }
+
+        route.MarkUnpublished();
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new RouteUnpublishedIntegrationEvent(route.Id, route.OwnerId, clock.GetUtcNow().UtcDateTime), cancellationToken);
+        return route.ToDto(user.UserId, groups);
+    }
+}

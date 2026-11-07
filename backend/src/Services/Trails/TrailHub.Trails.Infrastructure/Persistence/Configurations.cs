@@ -35,6 +35,8 @@ internal sealed class TrailConfiguration : IEntityTypeConfiguration<Trail>
 
         builder.Ignore(t => t.Start);
         builder.Ignore(t => t.Bounds);
+        builder.Ignore(t => t.IsHidden);
+        builder.Property(t => t.HiddenBy).HasConversion<string>().HasMaxLength(20);
 
         builder.OwnsMany(t => t.PointsOfInterest, poi =>
         {
@@ -99,5 +101,19 @@ internal sealed class FavoriteTrailConfiguration : IEntityTypeConfiguration<Favo
         builder.HasKey(f => new { f.UserId, f.TrailId });
         builder.Property(f => f.UserId).HasMaxLength(128);
         builder.HasOne<Trail>().WithMany().HasForeignKey(f => f.TrailId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class TrailReportConfiguration : IEntityTypeConfiguration<TrailReport>
+{
+    public void Configure(EntityTypeBuilder<TrailReport> builder)
+    {
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.UserId).HasMaxLength(128).IsRequired();
+        builder.Property(r => r.Reason).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.Details).HasMaxLength(TrailReport.MaxDetailsLength);
+        builder.Ignore(r => r.IsOpen);
+        builder.HasIndex(r => new { r.TrailId, r.UserId }).IsUnique();
+        builder.HasOne<Trail>().WithMany().HasForeignKey(r => r.TrailId).OnDelete(DeleteBehavior.Cascade);
     }
 }

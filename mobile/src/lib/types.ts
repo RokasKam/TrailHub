@@ -47,6 +47,19 @@ export type TrailDetails = TrailSummary & {
   pointsOfInterest: PointOfInterest[];
   photos: { url: string; caption: string | null; uploadedAtUtc: string }[];
   latestCondition: ConditionReport | null;
+  /** Set when the trail is out of Discover (only its author and moderators can still open it). */
+  hiddenBy: 'Author' | 'Reports' | 'Moderator' | null;
+  viewerIsModerator: boolean;
+};
+export type ReportReason = 'Inaccurate' | 'Dangerous' | 'Inappropriate' | 'Spam' | 'Other';
+export type ModerationItem = {
+  trailId: string;
+  name: string;
+  region: string;
+  createdBy: string;
+  hiddenBy: 'Author' | 'Reports' | 'Moderator' | null;
+  openReports: number;
+  reports: { reason: ReportReason; details: string | null; createdAtUtc: string }[];
 };
 
 export type RoutePoint = { latitude: number; longitude: number; elevation: number | null };

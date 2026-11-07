@@ -15,5 +15,9 @@ public static class TrailErrors
     public static readonly Error PointOfInterestNotFound = Error.NotFound("Trail.PointOfInterestNotFound", "The point of interest does not exist.");
     public static readonly Error InvalidPointOfInterestName = Error.Validation("Trail.InvalidPointOfInterestName", "Point of interest name is required.");
     public static readonly Error TooManyPhotos = Error.Validation("Trail.TooManyPhotos", $"A trail can have at most {Trail.MaxPhotos} photos.");
+    public static readonly Error HiddenByModerators = Error.Forbidden("Trail.HiddenByModerators", "This trail was taken out of Discover after reports. A moderator has to review it.");
+    public static readonly Error NotModerator = Error.Forbidden("Trail.NotModerator", "Only moderators can do that.");
+    public static readonly Error InvalidReport = Error.Validation("Trail.InvalidReport", $"Add details of at most {Community.TrailReport.MaxDetailsLength} characters.");
+    public static readonly Error CantReportOwnTrail = Error.Validation("Trail.CantReportOwnTrail", "You can't report your own trail.");
     public static readonly Error InvalidPhotoUrl = Error.Validation("Trail.InvalidPhotoUrl", "Photo URL must be an absolute https URL.");
 }

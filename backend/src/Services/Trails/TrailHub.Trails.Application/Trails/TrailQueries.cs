@@ -3,6 +3,7 @@ using TrailHub.BuildingBlocks.Application.Gpx;
 using TrailHub.BuildingBlocks.Domain;
 using TrailHub.BuildingBlocks.Domain.Geo;
 using TrailHub.Trails.Application.Abstractions;
+using TrailHub.Trails.Application.Community;
 using TrailHub.Trails.Domain.Trails;
 
 namespace TrailHub.Trails.Application.Trails;
@@ -45,13 +46,14 @@ internal sealed class GetTrailDetailsHandler(
     IFavoriteTrailRepository favorites,
     IConditionReportRepository conditions,
     IPhotoStorage photos,
+    IModerators moderators,
     ICurrentUser user)
     : IQueryHandler<GetTrailDetailsQuery, TrailDetailsDto>
 {
     public async Task<Result<TrailDetailsDto>> Handle(GetTrailDetailsQuery query, CancellationToken cancellationToken)
     {
         var trail = await trails.GetByIdAsync(query.TrailId, cancellationToken);
-        if (trail is null)
+        if (trail is null || !trail.CanSee(user.UserId, moderators))
         {
             return TrailErrors.NotFound;
         }
@@ -81,19 +83,21 @@ internal sealed class GetTrailDetailsHandler(
             trail.CreatedAtUtc,
             trail.PointsOfInterest.Select(p => p.ToDto()).ToList(),
             trail.Photos.Select(p => new TrailPhotoDto(photos.ResolveUrl(p.Url), p.Caption, p.UploadedAtUtc)).ToList(),
-            latest?.ToDto());
+            latest?.ToDto(),
+            trail.HiddenBy,
+            moderators.IsModerator(user.UserId));
     }
 }
 
 /// <param name="MaxPoints">Optional cap for map previews; full resolution when omitted.</param>
 public sealed record GetTrailRouteQuery(Guid TrailId, int? MaxPoints) : IQuery<TrailRouteDto>;
 
-internal sealed class GetTrailRouteHandler(ITrailRepository trails) : IQueryHandler<GetTrailRouteQuery, TrailRouteDto>
+internal sealed class GetTrailRouteHandler(ITrailRepository trails, IModerators moderators, ICurrentUser user) : IQueryHandler<GetTrailRouteQuery, TrailRouteDto>
 {
     public async Task<Result<TrailRouteDto>> Handle(GetTrailRouteQuery query, CancellationToken cancellationToken)
     {
         var trail = await trails.GetByIdAsync(query.TrailId, cancellationToken);
-        if (trail is null)
+        if (trail is null || !trail.CanSee(user.UserId, moderators))
         {
             return TrailErrors.NotFound;
         }
@@ -107,7 +111,7 @@ internal sealed class GetTrailRouteHandler(ITrailRepository trails) : IQueryHand
 
 public sealed record GetElevationProfileQuery(Guid TrailId, int Samples = 200) : IQuery<IReadOnlyList<ElevationSample>>;
 
-internal sealed class GetElevationProfileHandler(ITrailRepository trails) : IQueryHandler<GetElevationProfileQuery, IReadOnlyList<ElevationSample>>
+internal sealed class GetElevationProfileHandler(ITrailRepository trails, IModerators moderators, ICurrentUser user) : IQueryHandler<GetElevationProfileQuery, IReadOnlyList<ElevationSample>>
 {
     public async Task<Result<IReadOnlyList<ElevationSample>>> Handle(GetElevationProfileQuery query, CancellationToken cancellationToken)
     {
@@ -117,18 +121,18 @@ internal sealed class GetElevationProfileHandler(ITrailRepository trails) : IQue
         }
 
         var trail = await trails.GetByIdAsync(query.TrailId, cancellationToken);
-        return trail is null ? TrailErrors.NotFound : Result<IReadOnlyList<ElevationSample>>.Success(trail.GetElevationProfile(query.Samples));
+        return trail is null || !trail.CanSee(user.UserId, moderators) ? TrailErrors.NotFound : Result<IReadOnlyList<ElevationSample>>.Success(trail.GetElevationProfile(query.Samples));
     }
 }
 
 public sealed record ExportTrailGpxQuery(Guid TrailId) : IQuery<GpxFileDto>;
 
-internal sealed class ExportTrailGpxHandler(ITrailRepository trails, IGpxSerializer gpx) : IQueryHandler<ExportTrailGpxQuery, GpxFileDto>
+internal sealed class ExportTrailGpxHandler(ITrailRepository trails, IGpxSerializer gpx, IModerators moderators, ICurrentUser user) : IQueryHandler<ExportTrailGpxQuery, GpxFileDto>
 {
     public async Task<Result<GpxFileDto>> Handle(ExportTrailGpxQuery query, CancellationToken cancellationToken)
     {
         var trail = await trails.GetByIdAsync(query.TrailId, cancellationToken);
-        if (trail is null)
+        if (trail is null || !trail.CanSee(user.UserId, moderators))
         {
             return TrailErrors.NotFound;
         }

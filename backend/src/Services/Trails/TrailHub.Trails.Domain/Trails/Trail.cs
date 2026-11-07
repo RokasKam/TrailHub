@@ -3,6 +3,19 @@ using TrailHub.BuildingBlocks.Domain.Geo;
 
 namespace TrailHub.Trails.Domain.Trails;
 
+/// <summary>Who took a trail out of Discover; only the same kind of decision brings it back automatically.</summary>
+public enum HiddenBy
+{
+    /// <summary>The author unpublished it (from the Routes service).</summary>
+    Author,
+
+    /// <summary>Hidden automatically after <see cref="Trail.AutoHideReportCount"/> people reported it.</summary>
+    Reports,
+
+    /// <summary>A moderator hid it.</summary>
+    Moderator,
+}
+
 public enum Difficulty
 {
     Easy,
@@ -17,6 +30,9 @@ public sealed class Trail : AggregateRoot<Guid>
     public const int MaxDescriptionLength = 5000;
     public const int MaxRegionLength = 200;
     public const int MaxRoutePoints = 50_000;
+
+    /// <summary>Distinct reports that take a trail out of Discover until a moderator looks at it.</summary>
+    public const int AutoHideReportCount = 3;
     public const int MaxPointsOfInterest = 200;
     public const int MaxPhotos = 50;
 
@@ -60,6 +76,13 @@ public sealed class Trail : AggregateRoot<Guid>
     public string CreatedBy { get; private set; } = null!;
 
     public DateTime CreatedAtUtc { get; private set; }
+
+    /// <summary>Set when the trail is out of Discover; hidden trails are only visible to their author and moderators.</summary>
+    public HiddenBy? HiddenBy { get; private set; }
+
+    public DateTime? HiddenAtUtc { get; private set; }
+
+    public bool IsHidden => HiddenBy is not null;
 
     public IReadOnlyList<PointOfInterest> PointsOfInterest => _pointsOfInterest;
 
@@ -124,6 +147,36 @@ public sealed class Trail : AggregateRoot<Guid>
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         Region = region.Trim();
         Difficulty = difficulty;
+        return Result.Success();
+    }
+
+    public void Hide(HiddenBy by, DateTime nowUtc)
+    {
+        // A moderator's decision isn't overridden by later, weaker ones (e.g. reports after a moderator hid it).
+        if (HiddenBy == Trails.HiddenBy.Moderator && by != Trails.HiddenBy.Moderator)
+        {
+            return;
+        }
+
+        HiddenBy = by;
+        HiddenAtUtc = nowUtc;
+    }
+
+    /// <summary>Back in Discover. The author can only undo their own unpublish, not a moderator's or the reports' decision.</summary>
+    public Result Unhide(HiddenBy by)
+    {
+        if (HiddenBy is null)
+        {
+            return Result.Success();
+        }
+
+        if (by == Trails.HiddenBy.Author && HiddenBy != Trails.HiddenBy.Author)
+        {
+            return TrailErrors.HiddenByModerators;
+        }
+
+        HiddenBy = null;
+        HiddenAtUtc = null;
         return Result.Success();
     }
 

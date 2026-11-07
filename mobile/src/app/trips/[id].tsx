@@ -11,6 +11,7 @@ import { useSession } from '@/auth/session';
 import { DateField, toDateOnly } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { TrailPicker } from '@/components/trail-picker';
+import { SaveRouteOffline } from '@/components/offline-route';
 import { useStartRouteHike } from '@/components/route-hike';
 import { TrailMap } from '@/components/trail-map';
 import { TripChecklist } from '@/components/trip-checklist';
@@ -243,6 +244,7 @@ function TripRoute({ trip, route, routeError, change, units }: { trip: Trip; rou
             {formatDistance(route.stats.distanceMeters, units)} · ↑ {formatElevation(route.stats.ascentMeters, units)} · {route.days.length} day{route.days.length > 1 ? 's' : ''}
             {route.days.length !== trip.dayCount && ` · the trip has ${trip.dayCount} day${trip.dayCount > 1 ? 's' : ''}`}
           </ThemedText>
+          <SaveRouteOffline route={route} />
         </Card>
       )}
       {trip.routeId && !route && routeError && (

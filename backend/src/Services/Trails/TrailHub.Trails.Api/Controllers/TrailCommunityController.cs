@@ -30,6 +30,28 @@ public sealed class TrailCommunityController : ApiController
     public async Task<IActionResult> RemoveFavorite(Guid id, [FromServices] ICommandHandler<SetFavoriteCommand> handler, CancellationToken ct) =>
         FromResult(await handler.Handle(new SetFavoriteCommand(id, IsFavorite: false), ct));
 
+    /// <summary>Reports a trail as inaccurate, dangerous, inappropriate or spam. Reporting again updates your report.</summary>
+    /// <remarks>After 3 people report a trail it's taken out of Discover until a moderator reviews it.</remarks>
+    [HttpPost("{id:guid}/report")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Report(Guid id, ReportTrailRequest body, [FromServices] ICommandHandler<ReportTrailCommand> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new ReportTrailCommand(id, body.Reason, body.Details), ct));
+
+    /// <summary>Moderators: trails with open reports, and trails hidden by reports or moderators.</summary>
+    [HttpGet("moderation")]
+    [ProducesResponseType<IReadOnlyList<ModerationItemDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<ModerationItemDto>>> ModerationQueue([FromServices] IQueryHandler<GetModerationQueueQuery, IReadOnlyList<ModerationItemDto>> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new GetModerationQueueQuery(), ct));
+
+    /// <summary>Moderators: hide a trail from Discover (<c>hidden: true</c>) or restore it. Resolves its open reports.</summary>
+    [HttpPut("{id:guid}/moderation")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Moderate(Guid id, ModerateTrailRequest body, [FromServices] ICommandHandler<ModerateTrailCommand> handler, CancellationToken ct) =>
+        FromResult(await handler.Handle(new ModerateTrailCommand(id, body.Hidden), ct));
+
     /// <summary>Reviews for a trail, newest first.</summary>
     [HttpGet("{id:guid}/reviews")]
     [ProducesResponseType<PagedResult<ReviewDto>>(StatusCodes.Status200OK)]
@@ -72,3 +94,7 @@ public sealed class TrailCommunityController : ApiController
 public sealed record ReviewRequest(int Rating, string? Comment);
 
 public sealed record ConditionReportRequest(TrailCondition Condition, string? Note);
+
+public sealed record ReportTrailRequest(ReportReason Reason, string? Details);
+
+public sealed record ModerateTrailRequest(bool Hidden);

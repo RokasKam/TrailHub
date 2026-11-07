@@ -5,7 +5,7 @@ import { ActionSheetIOS, Alert, Platform, StyleSheet, View } from 'react-native'
 
 import { useUnits } from '@/api/profile';
 import { useGroups } from '@/api/planning';
-import { approxMeters, downloadRouteGpx, useAlternatives, useCopyRoute, useDeleteRoute, usePoisAlong, usePublishRoute, useRoute, useRoutePreview, useSaveRoute, useShareRoute } from '@/api/routes';
+import { approxMeters, downloadRouteGpx, useAlternatives, useCopyRoute, useDeleteRoute, usePoisAlong, usePublishRoute, useUnpublishRoute, suggestRouteName, useRoute, useRoutePreview, useSaveRoute, useShareRoute } from '@/api/routes';
 import { HikeRoute } from '@/components/route-hike';
 import { Itinerary, POI_LABELS, RouteElevation, RouteStats, RouteWarnings } from '@/components/route-summary';
 import { ThemedText } from '@/components/themed-text';
@@ -173,8 +173,8 @@ export default function RouteEditorScreen() {
     ]);
 
   const routeName = name ?? saved.data?.name ?? '';
-  const doSave = (then?: (id: string) => void) => {
-    const finalName = routeName.trim() || `Route ${new Date().toLocaleDateString()}`;
+  const doSave = async (then?: (id: string) => void) => {
+    const finalName = routeName.trim() || (await suggestRouteName(waypoints)) || `Route ${new Date().toLocaleDateString()}`;
     save.mutate(
       { name: finalName, description: saved.data?.description ?? null, waypoints },
       {
@@ -198,7 +198,7 @@ export default function RouteEditorScreen() {
       }
     };
     if (id && edited === null) void run(id);
-    else doSave((savedId) => void run(savedId));
+    else void doSave((savedId) => void run(savedId));
   };
 
   const markers: MapMarker[] = waypoints.map((w, i) => ({
@@ -354,7 +354,7 @@ export default function RouteEditorScreen() {
             <Button
               icon="square.and.arrow.down"
               label={id ? (edited !== null || name !== null ? 'Save changes' : 'Saved') : 'Save route'}
-              onPress={() => doSave()}
+              onPress={() => void doSave()}
               loading={save.isPending}
               disabled={!!id && edited === null && name === null}
             />
@@ -418,6 +418,7 @@ const DIFFICULTIES: PlanDifficulty[] = ['Easy', 'Moderate', 'Hard', 'Expert'];
 /** Publishes the route to Discover as a public trail; published again, it updates that trail. */
 function PublishRoute({ route }: { route: PlannedRoute }) {
   const publish = usePublishRoute(route.id!);
+  const unpublish = useUnpublishRoute(route.id!);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(route.name ?? '');
   const [description, setDescription] = useState(route.description ?? '');
@@ -471,6 +472,23 @@ function PublishRoute({ route }: { route: PlannedRoute }) {
                 <Button icon="map" variant="secondary" label="View trail" onPress={() => router.push(`/trail/${route.id}`)} />
               </View>
             )}
+          </View>
+        )}
+        {route.publishedAtUtc && !open && (
+          <View style={styles.row}>
+            <Button
+              size="small"
+              variant="secondary"
+              icon="eye.slash"
+              label="Unpublish"
+              loading={unpublish.isPending}
+              onPress={() =>
+                Alert.alert('Take it out of Discover?', 'Its reviews and photos are kept if you publish it again.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Unpublish', style: 'destructive', onPress: () => unpublish.mutate(undefined, { onError: (e) => Alert.alert("Couldn't unpublish", describeError(e)) }) },
+                ])
+              }
+            />
           </View>
         )}
       </Card>

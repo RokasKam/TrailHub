@@ -44,6 +44,22 @@ internal sealed class PhotonGeocoder(HttpClient http, ILogger<PhotonGeocoder> lo
         }
     }
 
+    public async Task<Place?> ReverseAsync(GeoPoint point, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await http.GetFromJsonAsync<FeatureCollection>(string.Create(CultureInfo.InvariantCulture, $"reverse?lat={point.Latitude:F5}&lon={point.Longitude:F5}&lang=en"), cancellationToken);
+            return response?.Features is [var f, ..] && (f.Properties.City ?? f.Properties.Name) is { } name
+                ? new Place(name, f.Properties.State, point.Latitude, point.Longitude)
+                : null;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(e, "Photon reverse lookup failed");
+            return null;
+        }
+    }
+
     private sealed record FeatureCollection(IReadOnlyList<Feature>? Features);
 
     private sealed record Feature(Geometry Geometry, Properties Properties);

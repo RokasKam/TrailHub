@@ -113,6 +113,43 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
                     b.ToTable("Reviews", "trails");
                 });
 
+            modelBuilder.Entity("TrailHub.Trails.Domain.Community.TrailReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TrailId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrailId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("TrailReports", "trails");
+                });
+
             modelBuilder.Entity("TrailHub.Trails.Domain.Trails.Trail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -150,6 +187,13 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("EstimatedDurationMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("HiddenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HiddenBy")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("IsLoop")
                         .HasColumnType("boolean");
@@ -234,6 +278,15 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("TrailHub.Trails.Domain.Community.Review", b =>
+                {
+                    b.HasOne("TrailHub.Trails.Domain.Trails.Trail", null)
+                        .WithMany()
+                        .HasForeignKey("TrailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TrailHub.Trails.Domain.Community.TrailReport", b =>
                 {
                     b.HasOne("TrailHub.Trails.Domain.Trails.Trail", null)
                         .WithMany()
