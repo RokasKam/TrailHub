@@ -1,5 +1,7 @@
 # TrailHub
 
+[![CI](https://github.com/RokasKam/TrailHub/actions/workflows/ci.yml/badge.svg)](https://github.com/RokasKam/TrailHub/actions/workflows/ci.yml)
+
 Hiking app: discover trails, record hikes with GPS (offline-first), import/export GPX, plan
 multi-day trips, hike in groups with live location, and check mountain weather.
 
