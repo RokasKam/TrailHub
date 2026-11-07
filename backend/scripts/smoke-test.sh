@@ -61,7 +61,7 @@ call GET "/api/trails?minLat=49.2&minLon=19.9&maxLat=49.3&maxLon=20.0" "$A" | js
 call GET "/api/trails/$TRAIL/gpx" "$A" | grep -c "<trkpt" >/dev/null && ok "GPX export" || fail "GPX export"
 
 step "Photos (S3-compatible storage behind the gateway)"
-PHOTO=$(mktemp -t trailhub-photo).jpg
+PHOTO="$(mktemp "${TMPDIR:-/tmp}/trailhub-photo.XXXXXX").jpg" # works with both GNU and BSD mktemp
 # Smallest valid JPEG (1x1 px)
 python3 -c "import base64,sys; open(sys.argv[1],'wb').write(base64.b64decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='))" "$PHOTO"
 PHOTO_URL=$(call POST "/api/trails/$TRAIL/photos/upload" "$A" -F "file=@$PHOTO;type=image/jpeg" -F caption="Summit view" | json 'd.url')

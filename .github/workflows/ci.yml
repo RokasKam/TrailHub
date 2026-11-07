@@ -44,6 +44,8 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
+      # Expo writes this on `expo start`; it's gitignored, so create it for the type-check.
+      - run: echo '/// <reference types="expo/types" />' > expo-env.d.ts
       - run: npx tsc --noEmit
       - run: npx eslint src --max-warnings 0
 
