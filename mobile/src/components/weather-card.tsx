@@ -1,4 +1,4 @@
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { StyleSheet, View } from 'react-native';
 
 import { useForecast } from '@/api/planning';
@@ -8,7 +8,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { HikingSuitability, WeatherCondition } from '@/lib/types';
 
-const ICONS: Record<WeatherCondition, SFSymbol> = {
+const ICONS: Record<WeatherCondition, AppIcon> = {
   Clear: 'sun.max.fill',
   PartlyCloudy: 'cloud.sun.fill',
   Overcast: 'cloud.fill',

@@ -1,11 +1,13 @@
 import { NativeTabs } from 'expo-router/native-tabs';
+import { unstable_getMaterialSymbolSourceAsync } from 'expo-symbols';
 import { Platform, useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { type AppIcon, ICONS } from '@/lib/icons';
 
-// iOS uses SF Symbols; Android falls back to the bundled template images.
-const icon = (sf: string, android: number) =>
-  Platform.OS === 'ios' ? { sf: sf as never } : { src: android, renderingMode: 'template' as const };
+// iOS uses SF Symbols; Android renders the matching Material Symbol to an image (the tab bar tints it).
+const icon = (name: AppIcon) =>
+  Platform.OS === 'ios' ? { sf: name } : { src: unstable_getMaterialSymbolSourceAsync(ICONS[name], 24, '#000') };
 
 export default function TabsLayout() {
   const scheme = useColorScheme();
@@ -20,23 +22,23 @@ export default function TabsLayout() {
       labelStyle={{ selected: { color: colors.accent } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon {...icon('map.fill', require('@/assets/images/tabIcons/explore.png'))} />
+        <NativeTabs.Trigger.Icon {...icon('map.fill')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
         <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon {...icon('point.topleft.down.to.point.bottomright.curvepath.fill', require('@/assets/images/tabIcons/explore.png'))} />
+        <NativeTabs.Trigger.Icon {...icon('point.topleft.down.to.point.bottomright.curvepath.fill')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="record">
         <NativeTabs.Trigger.Label>Record</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon {...icon('record.circle.fill', require('@/assets/images/tabIcons/home.png'))} />
+        <NativeTabs.Trigger.Icon {...icon('record.circle.fill')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="activities">
         <NativeTabs.Trigger.Label>Hikes</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon {...icon('figure.hiking', require('@/assets/images/tabIcons/home.png'))} />
+        <NativeTabs.Trigger.Icon {...icon('figure.hiking')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon {...icon('person.crop.circle.fill', require('@/assets/images/tabIcons/home.png'))} />
+        <NativeTabs.Trigger.Icon {...icon('person.crop.circle.fill')} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

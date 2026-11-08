@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useUnits } from '@/api/profile';
@@ -84,7 +84,7 @@ function RouteList({ routes, units }: { routes: RouteSummary[]; units: Units }) 
   );
 }
 
-function Tile({ icon, color, title, text, onPress }: { icon: SFSymbol; color: string; title: string; text: string; onPress: () => void }) {
+function Tile({ icon, color, title, text, onPress }: { icon: AppIcon; color: string; title: string; text: string; onPress: () => void }) {
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.7 }]}>

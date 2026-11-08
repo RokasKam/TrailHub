@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { useEffect, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 
@@ -212,7 +212,7 @@ export default function TrailScreen() {
   );
 }
 
-const POI_ICONS: Record<PointOfInterestType, { icon: SFSymbol; color: string }> = {
+const POI_ICONS: Record<PointOfInterestType, { icon: AppIcon; color: string }> = {
   WaterSource: { icon: 'drop.fill', color: '#2563EB' },
   Shelter: { icon: 'house.fill', color: '#92400E' },
   Campsite: { icon: 'tent.fill', color: '#15803D' },
@@ -220,7 +220,7 @@ const POI_ICONS: Record<PointOfInterestType, { icon: SFSymbol; color: string }> 
   Other: { icon: 'mappin', color: '#6B7280' },
 };
 
-const CONDITION_ICONS: Record<TrailCondition, SFSymbol> = {
+const CONDITION_ICONS: Record<TrailCondition, AppIcon> = {
   Good: 'checkmark.seal.fill',
   Muddy: 'drop.triangle.fill',
   Snow: 'snowflake',

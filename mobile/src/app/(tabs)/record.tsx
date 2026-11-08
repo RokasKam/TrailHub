@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useUnits } from '@/api/profile';
@@ -195,7 +195,7 @@ export default function RecordScreen() {
   );
 }
 
-function RoundButton({ icon, label, size, background, color, onPress }: { icon: SFSymbol; label: string; size: number; background: string; color: string; onPress: () => void }) {
+function RoundButton({ icon, label, size, background, color, onPress }: { icon: AppIcon; label: string; size: number; background: string; color: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.roundButton, { transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
       <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: background, alignItems: 'center', justifyContent: 'center' }}>

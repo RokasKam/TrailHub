@@ -1,10 +1,12 @@
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
-import { type SFSymbol, SymbolView } from 'expo-symbols';
+import { SymbolView } from 'expo-symbols';
+import materialWeight from 'expo-symbols/androidWeights/medium';
 import { Children, Fragment, type PropsWithChildren, type ReactNode, use } from 'react';
 import {
   ActivityIndicator,
   type ColorValue,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +23,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Colors, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { describeError } from '@/lib/api';
+import { type AppIcon, ICONS } from '@/lib/icons';
 
 /** Brand green for things drawn outside React styles (map layers, charts). Screens use `theme.accent`. */
 export const Accent = Colors.light.accent;
@@ -28,12 +31,24 @@ export const Danger = Colors.light.danger;
 
 const glass = isLiquidGlassAvailable();
 
-/** SF Symbol on iOS. Android has no SF Symbols, so icons there are decorative-only and simply omitted. */
-export function Icon({ name, size = 17, color, weight = 'semibold', type = 'monochrome' }: { name: SFSymbol; size?: number; color?: ColorValue; weight?: 'regular' | 'medium' | 'semibold' | 'bold'; type?: 'monochrome' | 'hierarchical' | 'multicolor' }) {
+/** SF Symbol on iOS, the matching Material Symbol on Android (see `ICONS`). */
+export function Icon({ name, size = 17, color, weight = 'semibold', type = 'monochrome' }: { name: AppIcon; size?: number; color?: ColorValue; weight?: 'regular' | 'medium' | 'semibold' | 'bold'; type?: 'monochrome' | 'hierarchical' | 'multicolor' }) {
   const theme = useTheme();
-  // A tint replaces the symbol's own palette, so multicolor symbols get none.
-  const tint = type === 'multicolor' ? undefined : (color ?? theme.text);
-  return <SymbolView name={name} size={size} tintColor={tint} weight={weight} type={type} fallback={null} style={{ width: size, height: size }} />;
+  // A tint replaces the symbol's own palette, so multicolor symbols get none. Material Symbols have no
+  // palette, so Android always takes the tint.
+  const tint = type === 'multicolor' && Platform.OS === 'ios' ? undefined : (color ?? theme.text);
+  return (
+    <SymbolView
+      name={{ ios: name, android: ICONS[name] }}
+      size={size}
+      tintColor={tint}
+      // One Material weight for every icon: each weight is a separate font file to load.
+      weight={{ ios: weight, android: materialWeight }}
+      type={type}
+      fallback={null}
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 /** Scrollable page with safe-area padding that clears the header and tab bar. */
@@ -99,7 +114,7 @@ type ButtonProps = {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'tinted' | 'danger';
-  icon?: SFSymbol;
+  icon?: AppIcon;
   disabled?: boolean;
   loading?: boolean;
   size?: 'regular' | 'large' | 'small';
@@ -130,7 +145,7 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
 }
 
 /** Round icon-only button, e.g. in a page header or floating over a map. */
-export function IconButton({ icon, onPress, label, color, tinted }: { icon: SFSymbol; onPress: () => void; label: string; color?: ColorValue; tinted?: boolean }) {
+export function IconButton({ icon, onPress, label, color, tinted }: { icon: AppIcon; onPress: () => void; label: string; color?: ColorValue; tinted?: boolean }) {
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.92 : 1 }] })}>
@@ -141,7 +156,7 @@ export function IconButton({ icon, onPress, label, color, tinted }: { icon: SFSy
   );
 }
 
-export function Chip({ label, selected, onPress, icon }: { label: string; selected?: boolean; onPress: () => void; icon?: SFSymbol }) {
+export function Chip({ label, selected, onPress, icon }: { label: string; selected?: boolean; onPress: () => void; icon?: AppIcon }) {
   const theme = useTheme();
   const color = selected ? theme.background : theme.text;
   return (
@@ -163,7 +178,7 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
 }
 
 /** iOS-style segmented control. */
-export function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string; icon?: SFSymbol }[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string; icon?: AppIcon }[]; value: T; onChange: (value: T) => void }) {
   const theme = useTheme();
   return (
     <View style={[styles.segmented, { backgroundColor: theme.backgroundSelected }]}>
@@ -187,7 +202,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
   );
 }
 
-export function Badge({ label, color, icon, solid }: { label: string; color: string; icon?: SFSymbol; solid?: boolean }) {
+export function Badge({ label, color, icon, solid }: { label: string; color: string; icon?: AppIcon; solid?: boolean }) {
   return (
     <View style={[styles.badge, { backgroundColor: solid ? color : color + '22' }]}>
       {icon && <Icon name={icon} size={11} color={solid ? '#fff' : color} />}
@@ -198,7 +213,7 @@ export function Badge({ label, color, icon, solid }: { label: string; color: str
   );
 }
 
-export function Stat({ label, value, icon }: { label: string; value: string; icon?: SFSymbol }) {
+export function Stat({ label, value, icon }: { label: string; value: string; icon?: AppIcon }) {
   const theme = useTheme();
   return (
     <View style={styles.stat}>
@@ -258,7 +273,7 @@ export function ListRow({
   onPress,
   destructive,
 }: {
-  icon?: SFSymbol;
+  icon?: AppIcon;
   iconColor?: string;
   title: string;
   detail?: string;
@@ -294,7 +309,7 @@ export function ListRow({
   );
 }
 
-export function Input({ icon, ...props }: TextInputProps & { icon?: SFSymbol }) {
+export function Input({ icon, ...props }: TextInputProps & { icon?: AppIcon }) {
   const theme = useTheme();
   return (
     <View style={[styles.inputWrap, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }, props.multiline && { alignItems: 'flex-start' }]}>
@@ -305,7 +320,7 @@ export function Input({ icon, ...props }: TextInputProps & { icon?: SFSymbol }) 
 }
 
 /** Centered icon + message for empty lists. */
-export function EmptyState({ icon, title, message }: { icon: SFSymbol; title: string; message?: string }) {
+export function EmptyState({ icon, title, message }: { icon: AppIcon; title: string; message?: string }) {
   const theme = useTheme();
   return (
     <View style={styles.empty}>
@@ -340,7 +355,7 @@ export function QueryState({
   hasData?: boolean;
   empty?: boolean;
   emptyText?: string;
-  emptyIcon?: SFSymbol;
+  emptyIcon?: AppIcon;
   onRetry?: () => void;
 }) {
   const theme = useTheme();

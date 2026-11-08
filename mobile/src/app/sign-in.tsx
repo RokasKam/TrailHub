@@ -1,4 +1,4 @@
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -73,7 +73,7 @@ export default function SignInScreen() {
   );
 }
 
-function Feature({ icon, color, text }: { icon: SFSymbol; color: string; text: string }) {
+function Feature({ icon, color, text }: { icon: AppIcon; color: string; text: string }) {
   return (
     <View style={styles.feature}>
       <View style={[styles.featureIcon, { backgroundColor: color + '1F' }]}>

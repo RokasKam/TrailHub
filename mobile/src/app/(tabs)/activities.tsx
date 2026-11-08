@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { SFSymbol } from 'expo-symbols';
+import type { AppIcon } from '@/lib/icons';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { useActivities, useImportActivityGpx, useStatistics } from '@/api/activities';
@@ -118,7 +118,7 @@ export default function ActivitiesScreen() {
   );
 }
 
-function HeroStat({ icon, value, label }: { icon: SFSymbol; value: string; label: string }) {
+function HeroStat({ icon, value, label }: { icon: AppIcon; value: string; label: string }) {
   return (
     <View style={styles.heroStat}>
       <Icon name={icon} size={13} color="rgba(255,255,255,0.75)" />
