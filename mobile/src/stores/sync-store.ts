@@ -82,3 +82,37 @@ export const useSyncStore = create<SyncState>()(
 onlineManager.subscribe((online) => {
   if (online) void useSyncStore.getState().flush();
 });
+
+/**
+ * Resolves true once the hike has left the outbox (uploaded), or false when the current upload attempt
+ * ends with it still waiting (offline, server trouble, rejected) or nothing happens within `timeoutMs`.
+ */
+export function waitForUpload(id: string, timeoutMs = 30_000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let retried = false;
+    const check = (s: { pending: PendingActivity[]; syncing: boolean }) => {
+      const item = s.pending.find((p) => p.id === id);
+      if (!item) return true;
+      if (s.syncing) return null;
+      // Enqueued while an earlier upload run was finishing, so that run skipped it: give it its own run.
+      if (!retried && !item.lastError && onlineManager.isOnline()) {
+        retried = true;
+        setTimeout(() => void useSyncStore.getState().flush(), 0);
+        return null;
+      }
+      return false;
+    };
+    const now = check(useSyncStore.getState());
+    if (now !== null) return resolve(now);
+    const timer = setTimeout(() => done(false), timeoutMs);
+    const unsubscribe = useSyncStore.subscribe((s) => {
+      const result = check(s);
+      if (result !== null) done(result);
+    });
+    function done(result: boolean) {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(result);
+    }
+  });
+}

@@ -22,5 +22,14 @@ internal sealed class HikeActivityConfiguration : IEntityTypeConfiguration<HikeA
         builder.HasIndex(ActivityDbContext.Path).HasMethod("gist");
         builder.HasIndex(a => new { a.UserId, a.StartedAtUtc });
         builder.Ignore(a => a.AllPoints);
+
+        // Sharing with groups: "shared with any of my groups" is an array overlap, served by the GIN index.
+        builder.Property(a => a.SharedGroupIds); // uuid[]
+        builder.HasIndex(a => a.SharedGroupIds).HasMethod("gin");
+        builder.Property(a => a.Caption).HasMaxLength(HikeActivity.MaxCaptionLength);
+        builder.Property(a => a.Privacy).HasConversion<string>().HasMaxLength(20);
+        builder.HasIndex(a => a.SharedAtUtc);
+        builder.Property(a => a.Photos).HasJsonConversion();
+        builder.Ignore(a => a.IsShared);
     }
 }

@@ -43,6 +43,8 @@ function RootStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="trail/[id]" options={{ title: '' }} />
         <Stack.Screen name="activity/[id]" options={{ title: 'Hike' }} />
+        <Stack.Screen name="activity/share" options={{ title: 'Share hike', presentation: 'modal' }} />
+        <Stack.Screen name="feed/[id]" options={{ title: 'Hike' }} />
         <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
         <Stack.Screen name="trips/[id]" options={{ title: 'Trip' }} />
         <Stack.Screen name="groups/index" options={{ title: 'Groups' }} />

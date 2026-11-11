@@ -25,7 +25,10 @@ public static class DependencyInjection
         services.AddScoped<ITripRepository, TripRepository>();
         services.AddScoped<IGroupDirectory, GroupDirectory>();
         services.AddScoped<IGearListRepository, GearListRepository>();
-        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<GroupMembersChangedConsumer>());
+        // One membership snapshot at a time: a new group and its first join arrive together, and processing them in
+        // parallel makes both insert the same group (a duplicate-key failure, then a retry that briefly leaves the
+        // read model stale).
+        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<GroupMembersChangedConsumer>().Endpoint(e => e.ConcurrentMessageLimit = 1));
         services.AddHealthChecks().AddDbContextCheck<TripsDbContext>("trips-db", tags: ["ready"]);
         return services;
     }

@@ -12,6 +12,13 @@ public sealed class HikeActivity : AggregateRoot<Guid>
     public const int MaxNameLength = 200;
     public const int MaxNotesLength = 4000;
     public const int MaxPoints = 100_000;
+    public const int MaxShareGroups = 10;
+    public const int MaxCaptionLength = 500;
+    public const int MaxPhotos = 6;
+    public const long MaxPhotoBytes = 10 * 1024 * 1024;
+
+    /// <summary>Uploaded photos are stored under this prefix in the photo store.</summary>
+    public const string PhotoKeyRoot = "hikes/";
 
     /// <summary>Tolerates small device clock drift when rejecting timestamps from the future.</summary>
     private static readonly TimeSpan FutureTolerance = TimeSpan.FromMinutes(10);
@@ -56,7 +63,22 @@ public sealed class HikeActivity : AggregateRoot<Guid>
 
     public DateTime CreatedAtUtc { get; private set; }
 
+    /// <summary>The groups whose members see this hike in their feed. Empty while not shared.</summary>
+    public Guid[] SharedGroupIds { get; private set; } = [];
+
+    /// <summary>Caption shown with the shared hike.</summary>
+    public string? Caption { get; private set; }
+
+    public TrackPrivacy Privacy { get; private set; } = TrackPrivacy.Full;
+
+    /// <summary>When the hike was first shared; kept when sharing is edited, cleared when it's unshared.</summary>
+    public DateTime? SharedAtUtc { get; private set; }
+
+    public IReadOnlyList<HikePhoto> Photos { get; private set; } = [];
+
     public IEnumerable<TrackPoint> AllPoints => Segments.SelectMany(s => s.Points);
+
+    public bool IsShared => SharedAtUtc is not null;
 
     public static Result<HikeActivity> Create(
         Guid id,
@@ -143,6 +165,104 @@ public sealed class HikeActivity : AggregateRoot<Guid>
         Name = name.Trim();
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Shares the hike with some of the author's groups, or updates the groups, caption and privacy of a hike that is
+    /// already shared (keeping when it was first shared).
+    /// </summary>
+    /// <param name="groupIds">The groups to share with (1 to <see cref="MaxShareGroups"/>).</param>
+    /// <param name="authorGroupIds">The groups the author currently belongs to.</param>
+    /// <param name="caption">Optional caption, at most <see cref="MaxCaptionLength"/> characters.</param>
+    /// <param name="privacy">What members see of the track.</param>
+    /// <param name="nowUtc">The current time.</param>
+    public Result Share(IReadOnlyCollection<Guid> groupIds, IReadOnlyCollection<Guid> authorGroupIds, string? caption, TrackPrivacy privacy, DateTime nowUtc)
+    {
+        var distinct = groupIds.Distinct().ToArray();
+        if (distinct.Length == 0)
+        {
+            return ActivityErrors.NoGroups;
+        }
+
+        if (distinct.Length > MaxShareGroups)
+        {
+            return ActivityErrors.TooManyGroups;
+        }
+
+        if (distinct.Any(g => !authorGroupIds.Contains(g)))
+        {
+            return ActivityErrors.NotAGroupMember;
+        }
+
+        var trimmed = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+        if (trimmed?.Length > MaxCaptionLength)
+        {
+            return ActivityErrors.InvalidCaption;
+        }
+
+        if (!Enum.IsDefined(privacy))
+        {
+            return ActivityErrors.InvalidPrivacy;
+        }
+
+        SharedGroupIds = distinct;
+        Caption = trimmed;
+        Privacy = privacy;
+        // Postgres keeps microseconds; dropping the last tick digit now means the time returned here equals the stored one.
+        SharedAtUtc ??= new DateTime(nowUtc.Ticks - (nowUtc.Ticks % 10), DateTimeKind.Utc);
+        return Result.Success();
+    }
+
+    /// <summary>Stops sharing. Likes and comments are kept and reappear if the hike is shared again.</summary>
+    public void Unshare()
+    {
+        SharedGroupIds = [];
+        Caption = null;
+        Privacy = TrackPrivacy.Full;
+        SharedAtUtc = null;
+    }
+
+    /// <summary>Whether <paramref name="userId"/> can see this hike in the feed: it's theirs, or shared with a group they're in.</summary>
+    public bool IsVisibleTo(string userId, IReadOnlyCollection<Guid> userGroupIds) =>
+        IsShared && (UserId == userId || SharedGroupIds.Any(userGroupIds.Contains));
+
+    /// <summary>The storage key prefix for this hike's photos, so one hike can't claim another's files.</summary>
+    public static string PhotoKeyPrefix(Guid activityId) => $"{PhotoKeyRoot}{activityId:N}/";
+
+    /// <summary>Attaches an uploaded photo stored under <see cref="PhotoKeyPrefix"/>.</summary>
+    public Result<HikePhoto> AddPhoto(string storageKey, string? caption, DateTime nowUtc)
+    {
+        if (Photos.Count >= MaxPhotos)
+        {
+            return ActivityErrors.TooManyPhotos;
+        }
+
+        var trimmed = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+        if (trimmed?.Length > MaxCaptionLength)
+        {
+            return ActivityErrors.InvalidCaption;
+        }
+
+        if (!storageKey.StartsWith(PhotoKeyPrefix(Id), StringComparison.Ordinal) || storageKey.Contains("..", StringComparison.Ordinal))
+        {
+            return ActivityErrors.InvalidPhotoKey;
+        }
+
+        var photo = new HikePhoto(Guid.CreateVersion7(), storageKey, trimmed, nowUtc);
+        Photos = [.. Photos, photo];
+        return photo;
+    }
+
+    /// <summary>Detaches a photo and returns it, so its stored file can be deleted.</summary>
+    public Result<HikePhoto> RemovePhoto(Guid photoId)
+    {
+        if (Photos.FirstOrDefault(p => p.Id == photoId) is not { } photo)
+        {
+            return ActivityErrors.PhotoNotFound;
+        }
+
+        Photos = Photos.Where(p => p.Id != photoId).ToList();
+        return photo;
     }
 
     private void CalculateMetrics()

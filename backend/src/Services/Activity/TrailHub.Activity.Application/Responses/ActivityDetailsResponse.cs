@@ -22,4 +22,6 @@ public sealed record ActivityDetailsResponse(
     GeoBounds Bounds,
     IReadOnlyList<IReadOnlyList<TrackPointDto>> Segments,
     IReadOnlyList<ElevationSample> ElevationProfile,
-    Guid? RouteId);
+    Guid? RouteId,
+    HikeSharingResponse? Sharing,
+    IReadOnlyList<HikePhotoResponse> Photos);

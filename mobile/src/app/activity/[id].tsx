@@ -4,9 +4,10 @@ import { Alert, View } from 'react-native';
 import { downloadActivityGpx, useActivity, useDeleteActivity } from '@/api/activities';
 import { useUnits } from '@/api/profile';
 import { ElevationChart } from '@/components/charts';
+import { HikePhotoEditor } from '@/components/share-hike';
 import { ThemedText } from '@/components/themed-text';
 import { TrailMap } from '@/components/trail-map';
-import { Card, List, ListRow, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
+import { Button, Card, List, ListRow, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
 import { formatDate, formatDistance, formatDuration, formatElevation, formatPace } from '@/lib/format';
 import { shareTextFile } from '@/lib/share-file';
 
@@ -42,6 +43,12 @@ export default function ActivityScreen() {
           {a.segments.length > 1 && ` · ${a.segments.length - 1} pause${a.segments.length > 2 ? 's' : ''}`}
         </ThemedText>
       </View>
+      <Button
+        label={a.sharing ? `Shared with ${a.sharing.groupIds.length} group${a.sharing.groupIds.length === 1 ? '' : 's'}` : 'Share with your groups'}
+        variant={a.sharing ? 'tinted' : 'primary'}
+        icon={a.sharing ? 'person.3.fill' : 'square.and.arrow.up'}
+        onPress={() => router.push(`/activity/share?id=${a.id}`)}
+      />
       <Card>
         <StatRow>
           <Stat icon="point.topleft.down.to.point.bottomright.curvepath" label="Distance" value={formatDistance(a.distanceMeters, units)} />
@@ -62,7 +69,11 @@ export default function ActivityScreen() {
         </Section>
       )}
       {a.notes && <ThemedText>{a.notes}</ThemedText>}
+      <HikePhotoEditor activityId={a.id} photos={a.photos ?? []} />
       <List>
+        {a.sharing && (
+          <ListRow icon="person.3.fill" iconColor="#0EA5E9" title="View in feed" detail="Likes and comments from your groups" onPress={() => router.push(`/feed/${a.id}`)} />
+        )}
         {a.trailId && <ListRow icon="map.fill" iconColor="#16A34A" title="View trail" onPress={() => router.push(`/trail/${a.trailId}`)} />}
         {a.routeId && <ListRow icon="point.topleft.down.to.point.bottomright.curvepath" iconColor="#7C3AED" title="View planned route" onPress={() => router.push(`/routes/${a.routeId}`)} />}
         <ListRow

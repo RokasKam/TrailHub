@@ -1,4 +1,5 @@
 using TrailHub.Activity.Application.Dtos;
+using TrailHub.Activity.Application.Interfaces.Providers;
 using TrailHub.Activity.Application.Responses;
 using TrailHub.Activity.Domain.Activities;
 using TrailHub.BuildingBlocks.Domain.Geo;
@@ -10,7 +11,7 @@ internal static class ActivityMappings
     public static ActivitySummaryResponse ToSummary(this HikeActivity a) =>
         new(a.Id, a.Name, a.TrailId, a.Source, a.StartedAtUtc, a.EndedAtUtc, a.DistanceMeters, a.ElevationGainMeters, a.MovingDurationSeconds, a.AverageSpeedMetersPerSecond);
 
-    public static ActivityDetailsResponse ToDetails(this HikeActivity a)
+    public static ActivityDetailsResponse ToDetails(this HikeActivity a, IHikePhotoStorage storage)
     {
         var points = a.AllPoints.Select(p => p.ToGeoPoint()).ToList();
         return new ActivityDetailsResponse(
@@ -31,6 +32,14 @@ internal static class ActivityMappings
             GeoBounds.From(points),
             a.Segments.Select(s => (IReadOnlyList<TrackPointDto>)s.Points.Select(p => new TrackPointDto(p.Latitude, p.Longitude, p.Elevation, p.TimestampUtc)).ToList()).ToList(),
             ElevationProfile.Build(a.Segments.Select(s => (IReadOnlyList<GeoPoint>)s.Points.Select(p => p.ToGeoPoint()).ToList()).ToList()),
-            a.RouteId);
+            a.RouteId,
+            a.ToSharing(),
+            a.Photos.Select(p => p.ToResponse(storage)).ToList());
     }
+
+    public static HikeSharingResponse? ToSharing(this HikeActivity a) =>
+        a.SharedAtUtc is { } sharedAt ? new HikeSharingResponse(a.SharedGroupIds, a.Caption, a.Privacy, sharedAt) : null;
+
+    public static HikePhotoResponse ToResponse(this HikePhoto p, IHikePhotoStorage storage) =>
+        new(p.Id, storage.ResolveUrl(p.Key), p.Caption, p.AddedAtUtc);
 }

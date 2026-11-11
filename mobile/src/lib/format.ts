@@ -33,3 +33,13 @@ export function formatPace(metersPerSecond: number, units: Units = 'Metric') {
 export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+/** "just now", "5m ago", "3h ago", "2d ago", then the date. */
+export function formatTimeAgo(iso: string) {
+  const seconds = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)}d ago`;
+  return formatDate(iso);
+}

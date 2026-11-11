@@ -1,4 +1,5 @@
 using TrailHub.Activity.Application.Dtos;
+using TrailHub.Activity.Application.Interfaces.Providers;
 using TrailHub.Activity.Application.Interfaces.Repository;
 using TrailHub.Activity.Application.Interfaces.Service;
 using TrailHub.Activity.Application.Mappings;
@@ -17,6 +18,7 @@ internal sealed class ActivityService(
     IUnitOfWork unitOfWork,
     IEventPublisher events,
     IGpxSerializer gpx,
+    IHikePhotoStorage photos,
     ICurrentUser user,
     TimeProvider clock) : IActivityService
 {
@@ -24,7 +26,7 @@ internal sealed class ActivityService(
         activities.GetPageAsync(user.UserId, page, cancellationToken);
 
     public async Task<ActivityDetailsResponse> GetActivityAsync(Guid id, CancellationToken cancellationToken) =>
-        (await GetOwnAsync(id, cancellationToken)).ToDetails();
+        (await GetOwnAsync(id, cancellationToken)).ToDetails(photos);
 
     public async Task<GpxFileResponse> ExportGpxAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -99,19 +101,20 @@ internal sealed class ActivityService(
         activities.Remove(activity);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await events.PublishAsync(new ActivityDeletedIntegrationEvent(activity.Id, activity.UserId), cancellationToken);
+
+        // Likes and comments go with the hike (database cascade); its photo files are removed best effort.
+        foreach (var photo in activity.Photos)
+        {
+            await photos.DeleteAsync(photo.Key, cancellationToken);
+        }
     }
 
     private static TrackPoint ToTrackPoint(TrackPointDto p) =>
         new(p.Latitude, p.Longitude, p.Elevation, DateTime.SpecifyKind(p.TimestampUtc, DateTimeKind.Utc));
 
     /// <summary>The caller's hike. Other people's hikes are reported as not found.</summary>
-    private async Task<HikeActivity> GetOwnAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var activity = await activities.GetByIdAsync(id, cancellationToken);
-        return activity is not null && activity.UserId == user.UserId
-            ? activity
-            : throw ActivityErrors.NotFound.ToException();
-    }
+    private Task<HikeActivity> GetOwnAsync(Guid id, CancellationToken cancellationToken) =>
+        activities.GetOwnAsync(id, user.UserId, cancellationToken);
 
     private async Task<ActivitySummaryResponse> SaveAsync(
         Guid id,

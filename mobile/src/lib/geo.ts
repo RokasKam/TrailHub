@@ -43,3 +43,11 @@ export function trackMetrics(segments: TrackPoint[][], now = Date.now()) {
 export function toCameraBounds(b: { minLatitude: number; minLongitude: number; maxLatitude: number; maxLongitude: number }) {
   return { sw: [b.minLongitude, b.minLatitude] as [number, number], ne: [b.maxLongitude, b.maxLatitude] as [number, number] };
 }
+
+/** Bounding box of a list of coordinates (undefined when empty). */
+export function boundsOf(points: { latitude: number; longitude: number }[]) {
+  if (points.length === 0) return undefined;
+  const lats = points.map((p) => p.latitude);
+  const lons = points.map((p) => p.longitude);
+  return { minLatitude: Math.min(...lats), minLongitude: Math.min(...lons), maxLatitude: Math.max(...lats), maxLongitude: Math.max(...lons) };
+}

@@ -29,6 +29,21 @@ internal sealed class ActivityRepository(ActivityDbContext db) : IActivityReposi
         return new PagedResult<ActivitySummaryResponse>(items, page.Page, page.PageSize, total);
     }
 
+    public async Task<PagedResult<HikeActivity>> GetFeedPageAsync(string userId, IReadOnlyCollection<Guid> groupIds, bool includeOwn, PageRequest page, CancellationToken cancellationToken)
+    {
+        var groups = groupIds.ToArray();
+        var query = db.Activities.AsNoTracking()
+            .Where(a => a.SharedAtUtc != null && (a.SharedGroupIds.Any(g => groups.Contains(g)) || (includeOwn && a.UserId == userId)));
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(a => a.SharedAtUtc)
+            .ThenByDescending(a => a.Id)
+            .Skip(page.Skip)
+            .Take(page.PageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResult<HikeActivity>(items, page.Page, page.PageSize, total);
+    }
+
     public async Task<ActivityTotalsResponse> GetTotalsAsync(string userId, DateTime? sinceUtc, CancellationToken cancellationToken)
     {
         var query = db.Activities.Where(a => a.UserId == userId);

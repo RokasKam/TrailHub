@@ -176,6 +176,39 @@ expect('remove member (owner)', await call('DELETE', '/api/groups/{id}/members/{
 expectProblem('owner leaves without handing over', await call('POST', '/api/groups/{id}/leave', { id: group?.id }, a), 409);
 expectProblem('transfer ownership (member)', await call('POST', '/api/groups/{id}/owner', { id: group?.id }, b, { userId: b }), 403);
 
+// ── Hike feed (Activity) ───────────────────────────────────────────────────────────────────────────────────
+console.log('Hike feed');
+const targets = await eventually(() => call('GET', '/api/activities/share-targets', {}, a), (r) => r.body?.some?.((g) => g.groupId === group?.id && g.memberCount === 2));
+expect('share targets', targets, 200, (r) => r.some((g) => g.groupId === group?.id && g.name === 'Sweep group'));
+const hp = { id: activityId };
+expect('share hike', await call('PUT', '/api/activities/{id}/sharing', hp, a, { groupIds: [group?.id], caption: 'Sweep', privacy: 'HideEnds' }), 200, (r) => r.groupIds[0] === group?.id && r.privacy === 'HideEnds' && !!r.sharedAtUtc);
+expectProblem('share with no groups', await call('PUT', '/api/activities/{id}/sharing', hp, a, { groupIds: [], privacy: 'Full' }), 400, 'Activity.NoGroups');
+expectProblem("share with a group I'm not in", await call('PUT', '/api/activities/{id}/sharing', hp, a, { groupIds: [missing], privacy: 'Full' }), 400, 'Activity.NotAGroupMember');
+expectProblem("share someone else's hike", await call('PUT', '/api/activities/{id}/sharing', hp, b, { groupIds: [group?.id], privacy: 'Full' }), 404, 'Activity.NotFound');
+const hikePhotoForm = (type) => {
+  const f = new FormData();
+  f.append('file', new Blob([new Uint8Array(68)], { type }), 'photo');
+  f.append('caption', 'Sweep photo');
+  return f;
+};
+const hikePhoto = expect('add hike photo', await call('POST', '/api/activities/{id}/photos', hp, a, null, { form: hikePhotoForm('image/png') }), 201, (p) => p.url.includes('hikes/') && p.caption === 'Sweep photo');
+expectProblem('add an unsupported hike photo', await call('POST', '/api/activities/{id}/photos', hp, a, null, { form: hikePhotoForm('text/plain') }), 400, 'Activity.UnsupportedPhoto');
+expect('hike details show sharing and photos', await call('GET', '/api/activities/{id}', hp, a), 200, (h) => h.sharing?.groupIds?.length === 1 && h.photos.length === 1);
+expect('feed', await call('GET', '/api/activities/feed?page=1&pageSize=10', {}, b), 200, (r) => r.items.some((p) => p.activityId === activityId && !p.isMine && p.author.displayName === 'Anna'));
+expectProblem("feed for a group I'm not in", await call('GET', `/api/activities/feed?groupId=${missing}`, {}, b), 404, 'Activity.GroupNotFound');
+expect('feed post', await call('GET', '/api/activities/feed/{id}', hp, b), 200, (p) => p.activityId === activityId && Array.isArray(p.comments) && Array.isArray(p.elevationProfile));
+const hidden = await eventually(() => call('GET', '/api/activities/feed/{id}', hp, outsider), (r) => r.status === 404);
+expectProblem('feed post (removed member)', hidden, 404, 'Activity.NotFound');
+expect('like', await call('PUT', '/api/activities/feed/{id}/like', hp, b), 200, (r) => r.likeCount === 1 && r.likedByMe === true);
+expect('unlike', await call('DELETE', '/api/activities/feed/{id}/like', hp, b), 200, (r) => r.likeCount === 0 && r.likedByMe === false);
+const comment = expect('comment', await call('POST', '/api/activities/feed/{id}/comments', hp, a, { text: ' Nice one ' }), 201, (c) => c.text === 'Nice one' && c.canDelete);
+expectProblem('blank comment', await call('POST', '/api/activities/feed/{id}/comments', hp, b, { text: ' ' }), 400, 'Activity.InvalidComment');
+expectProblem("delete someone else's comment", await call('DELETE', '/api/activities/feed/{id}/comments/{commentId}', { ...hp, commentId: comment?.id }, b), 403, 'Activity.NotCommentAuthor');
+expect('delete comment', await call('DELETE', '/api/activities/feed/{id}/comments/{commentId}', { ...hp, commentId: comment?.id }, a), 204);
+expect('delete hike photo', await call('DELETE', '/api/activities/{id}/photos/{photoId}', { ...hp, photoId: hikePhoto?.id }, a), 204);
+expect('unshare hike', await call('DELETE', '/api/activities/{id}/sharing', hp, a), 204);
+expectProblem('unshared post', await call('GET', '/api/activities/feed/{id}', hp, b), 404, 'Activity.NotFound');
+
 // ── Routes ─────────────────────────────────────────────────────────────────────────────────────────────────
 console.log('Routes');
 expect('preview', await call('POST', '/api/routes/preview', {}, a, { waypoints: [chamonix, argentiere] }), 200, (r) => r.stats?.distanceMeters > 1000);

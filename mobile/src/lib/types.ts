@@ -92,7 +92,44 @@ export type ActivityDetails = ActivitySummary & {
   /** The planned route the hike followed, if it was started from one. */
   routeId: string | null;
   elevationProfile: ElevationSample[];
+  /** Null when the hike isn't shared with any group. */
+  sharing: HikeSharing | null;
+  photos: HikePhoto[];
 };
+
+// Hike feed: hikes shared with the author's groups.
+/** What group members see of the track: all of it, without the first/last 200 m, or no map at all. */
+export type TrackPrivacy = 'Full' | 'HideEnds' | 'StatsOnly';
+export type HikePhoto = { id: string; url: string; caption: string | null; addedAtUtc: string };
+export type HikeSharing = { groupIds: string[]; caption: string | null; privacy: TrackPrivacy; sharedAtUtc: string };
+export type ShareTarget = { groupId: string; name: string; memberCount: number };
+export type PostAuthor = { userId: string; displayName: string };
+
+export type FeedPost = {
+  activityId: string;
+  author: PostAuthor;
+  name: string;
+  caption: string | null;
+  startedAtUtc: string;
+  sharedAtUtc: string;
+  distanceMeters: number;
+  elevationGainMeters: number;
+  movingDurationSeconds: number;
+  privacy: TrackPrivacy;
+  /** [lat, lon] pairs, simplified and with privacy applied; empty for StatsOnly. */
+  track: [number, number][];
+  photos: HikePhoto[];
+  /** Only the groups the viewer is in. */
+  groups: { groupId: string; name: string }[];
+  likeCount: number;
+  likedByMe: boolean;
+  commentCount: number;
+  isMine: boolean;
+};
+
+export type FeedComment = { id: string; author: PostAuthor; text: string; createdAtUtc: string; canDelete: boolean };
+export type FeedPostDetails = FeedPost & { comments: FeedComment[]; elevationProfile: ElevationSample[] };
+export type LikeState = { likeCount: number; likedByMe: boolean };
 
 export type ActivityTotals = {
   hikes: number;

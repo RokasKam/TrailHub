@@ -14,7 +14,7 @@ import { formatDistance, formatDuration, formatElevation, formatPace } from '@/l
 import { trackMetrics } from '@/lib/geo';
 import { requestTrackingPermissions, startTracking, stopTracking } from '@/location/tracking';
 import { useRecordingStore } from '@/stores/recording-store';
-import { useSyncStore } from '@/stores/sync-store';
+import { useSyncStore, waitForUpload } from '@/stores/sync-store';
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now());
@@ -78,6 +78,15 @@ export default function RecordScreen() {
     setName('');
     if (!id) return Alert.alert('Nothing recorded', 'No GPS points were recorded for this hike.');
     router.navigate('/activities');
+    // Sharing needs the hike on the server: offer it once the upload is through, otherwise point to later.
+    if (await waitForUpload(id)) {
+      Alert.alert('Share with your group?', 'Let your groups see this hike, with photos and a caption. You choose how much of the map they see.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Share', onPress: () => router.push(`/activity/share?id=${id}`) },
+      ]);
+    } else {
+      Alert.alert('Hike saved', 'It will upload when you’re back online. You can share it with your groups later from the hike’s page.');
+    }
   };
 
   const confirmDiscard = () =>

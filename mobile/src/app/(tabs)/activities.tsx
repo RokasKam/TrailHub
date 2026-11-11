@@ -1,21 +1,42 @@
 import { router } from 'expo-router';
-import type { AppIcon } from '@/lib/icons';
-import { Alert, StyleSheet, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { useActivities, useImportActivityGpx, useStatistics } from '@/api/activities';
+import { useActivities, useImportActivityGpx, useShareTargets, useStatistics } from '@/api/activities';
+import { useFeed } from '@/api/feed';
 import { useUnits } from '@/api/profile';
 import { BarChart } from '@/components/charts';
+import { FeedPostCard } from '@/components/feed-post-card';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Icon, IconButton, List, ListRow, PageHeader, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, Icon, IconButton, List, ListRow, PageHeader, QueryState, Screen, Section, Segmented, Stat, StatRow } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { ApiError } from '@/lib/api';
 import { formatDate, formatDistance, formatDuration, formatElevation } from '@/lib/format';
+import type { AppIcon } from '@/lib/icons';
 import { pickGpxFile } from '@/lib/pick-gpx';
 import { useSyncStore } from '@/stores/sync-store';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+type HikesView = 'mine' | 'feed';
+
 export default function ActivitiesScreen() {
+  const [view, setView] = useState<HikesView>('mine');
+  const toggle = (
+    <Segmented<HikesView>
+      options={[
+        { value: 'mine', label: 'My hikes', icon: 'figure.hiking' },
+        { value: 'feed', label: 'Feed', icon: 'person.3.fill' },
+      ]}
+      value={view}
+      onChange={setView}
+    />
+  );
+  return view === 'mine' ? <MyHikes toggle={toggle} /> : <Feed toggle={toggle} />;
+}
+
+function MyHikes({ toggle }: { toggle: ReactNode }) {
   const units = useUnits();
   const theme = useTheme();
   const stats = useStatistics();
@@ -35,12 +56,20 @@ export default function ActivitiesScreen() {
   const year = stats.data?.thisYear;
 
   return (
-    <Screen tabBar>
+    <Screen
+      tabBar
+      refreshing={stats.isRefetching || (activities.isRefetching && !activities.isFetchingNextPage)}
+      onRefresh={() => {
+        void stats.refetch();
+        void activities.refetch();
+      }}
+      onEndReached={() => activities.hasNextPage && !activities.isFetchingNextPage && void activities.fetchNextPage()}>
       <PageHeader
         eyebrow={year ? `${year.hikes} hike${year.hikes === 1 ? '' : 's'} this year` : undefined}
         title="Hikes"
         action={<IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickGpx} />}
       />
+      {toggle}
 
       {stats.data && year && (
         <>
@@ -118,6 +147,71 @@ export default function ActivitiesScreen() {
   );
 }
 
+/** Hikes your groups shared (yours included), newest first. */
+function Feed({ toggle }: { toggle: ReactNode }) {
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const targets = useShareTargets();
+  const groups = targets.data ?? [];
+  // A stale filter (you left that group) 404s; fall back to all groups.
+  const activeGroup = groups.some((g) => g.groupId === groupId) ? groupId : null;
+  const feed = useFeed(activeGroup);
+  const posts = feed.data?.pages.flatMap((p) => p.items) ?? [];
+  const notMember = feed.error instanceof ApiError && feed.error.status === 404 && activeGroup !== null;
+  const noGroups = targets.isSuccess && groups.length === 0;
+
+  return (
+    <Screen
+      tabBar
+      refreshing={feed.isRefetching && !feed.isFetchingNextPage}
+      onRefresh={() => {
+        void targets.refetch();
+        void feed.refetch();
+      }}
+      onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && void feed.fetchNextPage()}>
+      <PageHeader eyebrow="Your groups" title="Hikes" />
+      {toggle}
+
+      {groups.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
+          <Chip label="All groups" selected={activeGroup === null} onPress={() => setGroupId(null)} />
+          {groups.map((g) => (
+            <Chip key={g.groupId} label={g.name} selected={activeGroup === g.groupId} onPress={() => setGroupId(g.groupId)} />
+          ))}
+        </ScrollView>
+      )}
+
+      {notMember ? (
+        <Card style={{ alignItems: 'center' }}>
+          <EmptyState icon="person.3" title="You’re not in this group anymore" />
+          <Button label="Show all groups" variant="tinted" size="small" onPress={() => setGroupId(null)} />
+        </Card>
+      ) : posts.length === 0 && !feed.isLoading && !feed.error ? (
+        <Card style={{ alignItems: 'center' }}>
+          {noGroups ? (
+            <>
+              <EmptyState icon="person.3" title="No groups yet" message="Join or start a group, then share a hike with it to see it here." />
+              <Button label="Go to Groups" variant="tinted" icon="person.3" size="small" onPress={() => router.push('/groups')} />
+            </>
+          ) : (
+            <EmptyState
+              icon="figure.hiking"
+              title="Share a hike with your group to see it here"
+              message="Open any hike in My hikes and tap Share. Hikes your group members share show up here too."
+            />
+          )}
+        </Card>
+      ) : (
+        <QueryState isLoading={feed.isLoading} error={feed.error} hasData={posts.length > 0} onRetry={() => feed.refetch()} />
+      )}
+
+      {posts.map((p) => (
+        <FeedPostCard key={p.activityId} post={p} />
+      ))}
+      {feed.isFetchingNextPage && <ActivityIndicator style={{ marginVertical: Spacing.three }} />}
+    </Screen>
+  );
+}
+
 function HeroStat({ icon, value, label }: { icon: AppIcon; value: string; label: string }) {
   return (
     <View style={styles.heroStat}>
@@ -139,4 +233,6 @@ const styles = StyleSheet.create({
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, marginTop: Spacing.one },
   heroStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   pending: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chipScroll: { marginHorizontal: -(Spacing.three + 2) },
+  chips: { gap: Spacing.two, paddingHorizontal: Spacing.three + 2 },
 });

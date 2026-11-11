@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using TrailHub.Activity.Domain.Activities;
+using TrailHub.Activity.Domain.Feed;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.Activity.Infrastructure.Persistence.Configurations;
 
@@ -12,6 +13,12 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     private static readonly GeometryFactory Geography = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
 
     public DbSet<HikeActivity> Activities => Set<HikeActivity>();
+
+    public DbSet<HikeLike> HikeLikes => Set<HikeLike>();
+
+    public DbSet<HikeComment> HikeComments => Set<HikeComment>();
+
+    internal DbSet<KnownGroup> KnownGroups => Set<KnownGroup>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -33,5 +40,8 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
         modelBuilder.HasDefaultSchema("activity");
         modelBuilder.HasPostgresExtension("postgis");
         modelBuilder.ApplyConfiguration(new HikeActivityConfiguration());
+        modelBuilder.ApplyConfiguration(new HikeLikeConfiguration());
+        modelBuilder.ApplyConfiguration(new HikeCommentConfiguration());
+        modelBuilder.ApplyConfiguration(new KnownGroupConfiguration());
     }
 }

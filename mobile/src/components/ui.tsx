@@ -8,6 +8,7 @@ import {
   type ColorValue,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -51,13 +52,24 @@ export function Icon({ name, size = 17, color, weight = 'semibold', type = 'mono
   );
 }
 
+type ScreenProps = PropsWithChildren<{
+  scroll?: boolean;
+  tabBar?: boolean;
+  /** Pull to refresh. */
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** Called when the user scrolls near the bottom, e.g. to load the next page. */
+  onEndReached?: () => void;
+}>;
+
 /** Scrollable page with safe-area padding that clears the header and tab bar. */
-export function Screen({ children, scroll = true, tabBar = false }: PropsWithChildren<{ scroll?: boolean; tabBar?: boolean }>) {
+export function Screen({ children, scroll = true, tabBar = false, refreshing = false, onRefresh, onEndReached }: ScreenProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   // iOS 26+ stack headers are translucent and content scrolls under them; start below the header, not just the status bar.
   const headerHeight = use(HeaderHeightContext) ?? 0;
-  const padding = { paddingTop: Math.max(insets.top, headerHeight) + Spacing.three, paddingBottom: insets.bottom + (tabBar ? BottomTabInset : 0) + Spacing.five };
+  const top = Math.max(insets.top, headerHeight);
+  const padding = { paddingTop: top + Spacing.three, paddingBottom: insets.bottom + (tabBar ? BottomTabInset : 0) + Spacing.five };
   const content = <View style={[styles.content, !scroll && padding]}>{children}</View>;
   return scroll ? (
     <ScrollView
@@ -65,7 +77,16 @@ export function Screen({ children, scroll = true, tabBar = false }: PropsWithChi
       contentContainerStyle={[styles.scroll, padding]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets // keeps the focused field above the keyboard (iOS)
-      keyboardDismissMode="interactive">
+      keyboardDismissMode="interactive"
+      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} progressViewOffset={top} tintColor={theme.textSecondary} colors={[theme.accent]} /> : undefined}
+      scrollEventThrottle={onEndReached ? 200 : undefined}
+      onScroll={
+        onEndReached
+          ? ({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
+              if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) onEndReached();
+            }
+          : undefined
+      }>
       {content}
     </ScrollView>
   ) : (
@@ -313,7 +334,12 @@ export function Input({ icon, ...props }: TextInputProps & { icon?: AppIcon }) {
   const theme = useTheme();
   return (
     <View style={[styles.inputWrap, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }, props.multiline && { alignItems: 'flex-start' }]}>
-      {icon && <Icon name={icon} size={16} color={theme.textSecondary} />}
+      {icon && (
+        // A multi-line box aligns to the top, so line the icon up with the first line of text (the input's top padding).
+        <View style={props.multiline ? styles.multilineIcon : undefined}>
+          <Icon name={icon} size={16} color={theme.textSecondary} />
+        </View>
+      )}
       <TextInput placeholderTextColor={theme.textSecondary} {...props} style={[styles.input, { color: theme.text }, props.style]} />
     </View>
   );
@@ -414,6 +440,7 @@ const styles = StyleSheet.create({
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 42 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderRadius: Radius.medium, borderCurve: 'continuous', borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.three },
   input: { flex: 1, paddingVertical: 14, fontSize: 16 },
+  multilineIcon: { marginTop: 16 },
   empty: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.four, paddingHorizontal: Spacing.four },
   emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
   offlineNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },

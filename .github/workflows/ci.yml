@@ -99,6 +99,9 @@ jobs:
       - name: Gear lists
         working-directory: backend
         run: node scripts/gear-lists-test.mjs
+      - name: Hike feed
+        working-directory: backend
+        run: node scripts/hike-feed-test.mjs
       - name: Route sharing and publishing
         if: env.MAPBOX_ACCESS_TOKEN != ''
         working-directory: backend

@@ -98,10 +98,22 @@ services:
 
   activity-api:
     <<: *service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      seaweedfs: { condition: service_started }
     build: { context: ., args: { PROJECT: src/Services/Activity/TrailHub.Activity.Api, APP_DLL: TrailHub.Activity.Api.dll } }
     environment:
       <<: *service-env
       ConnectionStrings__ActivityDb: Host=postgres;Database=trailhub_activity;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+      # Hike photos share the trail photo bucket (keys under hikes/).
+      Photos__ServiceUrl: http://seaweedfs:8333
+      Photos__Bucket: trailhub-photos
+      Photos__AccessKey: trailhub
+      Photos__SecretKey: trailhub-photos-dev-secret
+      Photos__CreateBucket: "true"
+      Photos__PublicBaseUrl: ${PHOTOS_PUBLIC_BASE_URL:-http://localhost:8080/photos}
 
   trips-api:
     <<: *service

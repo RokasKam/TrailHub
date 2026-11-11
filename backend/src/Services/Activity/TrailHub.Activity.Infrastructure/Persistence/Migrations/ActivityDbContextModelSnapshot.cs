@@ -19,7 +19,7 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("activity")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
@@ -32,6 +32,10 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
 
                     b.Property<double>("AverageSpeedMetersPerSecond")
                         .HasColumnType("double precision");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -69,12 +73,28 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
                     b.Property<MultiLineString>("Path")
                         .HasColumnType("geography (multilinestring, 4326)");
 
+                    b.Property<string>("Photos")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Privacy")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid?>("RouteId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Segments")
                         .IsRequired()
                         .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("SharedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<Guid[]>("SharedGroupIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
 
                     b.Property<string>("Source")
                         .IsRequired()
@@ -98,9 +118,128 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Path"), "gist");
 
+                    b.HasIndex("SharedAtUtc");
+
+                    b.HasIndex("SharedGroupIds");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SharedGroupIds"), "gin");
+
                     b.HasIndex("UserId", "StartedAtUtc");
 
                     b.ToTable("Activities", "activity");
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.ToTable("HikeComments", "activity");
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeLike", b =>
+                {
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ActivityId", "UserId");
+
+                    b.ToTable("HikeLikes", "activity");
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Infrastructure.Persistence.KnownGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KnownGroups", "activity");
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeComment", b =>
+                {
+                    b.HasOne("TrailHub.Activity.Domain.Activities.HikeActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeLike", b =>
+                {
+                    b.HasOne("TrailHub.Activity.Domain.Activities.HikeActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Infrastructure.Persistence.KnownGroup", b =>
+                {
+                    b.OwnsMany("TrailHub.Activity.Infrastructure.Persistence.KnownGroupMember", "Members", b1 =>
+                        {
+                            b1.Property<Guid>("GroupId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("UserId")
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
+
+                            b1.Property<string>("DisplayName")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.HasKey("GroupId", "UserId");
+
+                            b1.HasIndex("UserId");
+
+                            b1.ToTable("KnownGroupMembers", "activity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("GroupId");
+                        });
+
+                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }
