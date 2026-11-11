@@ -111,9 +111,19 @@ const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 const photoForm = new FormData();
 photoForm.append('file', new Blob([png], { type: 'image/png' }), 'dot.png');
 photoForm.append('caption', 'Dot');
-expect('upload photo', await call('POST', '/api/trails/{id}/photos/upload', { id: trail }, b, null, { form: photoForm }), 201, (p) => !!p.url);
+const trailPhoto = expect('upload photo', await call('POST', '/api/trails/{id}/photos/upload', { id: trail }, b, null, { form: photoForm }), 201, (p) => !!p.url && !!p.id && p.uploadedBy === b && p.canDelete);
 expect('attach photo by URL', await call('POST', '/api/trails/{id}/photos', { id: trail }, b, { url: 'https://example.com/photo.jpg', caption: 'Link' }), 204);
 expectProblem('attach photo with a bad URL', await call('POST', '/api/trails/{id}/photos', { id: trail }, b, { url: 'not a url' }), 400);
+expect('details list photos with ids', await call('GET', '/api/trails/{id}', { id: trail }, a), 200, (t) => t.photos.some((p) => p.id === trailPhoto?.id && p.canDelete && !p.hidden));
+expectProblem('report own photo', await call('POST', '/api/trails/{id}/photos/{photoId}/report', { id: trail, photoId: trailPhoto?.id }, b, { reason: 'Spam' }), 400, 'Trail.CantReportOwnContent');
+expect('report photo', await call('POST', '/api/trails/{id}/photos/{photoId}/report', { id: trail, photoId: trailPhoto?.id }, a, { reason: 'Inappropriate', details: 'Sweep' }), 204);
+expectProblem('photo queue (not a moderator)', await call('GET', '/api/trails/moderation/photos', {}, b), 403, 'Trail.NotModerator');
+expect('photo queue (moderator)', await call('GET', '/api/trails/moderation/photos', {}, moderator), 200, (q) => q.some((x) => x.photoId === trailPhoto?.id && x.openReports === 1 && x.reports[0].userId === a));
+expectProblem('moderate photo (not a moderator)', await call('PUT', '/api/trails/{id}/photos/{photoId}/moderation', { id: trail, photoId: trailPhoto?.id }, b, { action: 'Hide' }), 403, 'Trail.NotModerator');
+expect('restore photo (moderator)', await call('PUT', '/api/trails/{id}/photos/{photoId}/moderation', { id: trail, photoId: trailPhoto?.id }, moderator, { action: 'Restore' }), 204);
+expectProblem('delete photo (not the uploader)', await call('DELETE', '/api/trails/{id}/photos/{photoId}', { id: trail, photoId: trailPhoto?.id }, outsider), 403, 'Trail.NotPhotoOwner');
+expect('delete photo (uploader)', await call('DELETE', '/api/trails/{id}/photos/{photoId}', { id: trail, photoId: trailPhoto?.id }, b), 204);
+expectProblem('delete missing photo', await call('DELETE', '/api/trails/{id}/photos/{photoId}', { id: trail, photoId: trailPhoto?.id }, a), 404, 'Trail.PhotoNotFound');
 
 // ── Moderation ─────────────────────────────────────────────────────────────────────────────────────────────
 console.log('Moderation');
@@ -204,6 +214,18 @@ expect('unlike', await call('DELETE', '/api/activities/feed/{id}/like', hp, b), 
 const comment = expect('comment', await call('POST', '/api/activities/feed/{id}/comments', hp, a, { text: ' Nice one ' }), 201, (c) => c.text === 'Nice one' && c.canDelete);
 expectProblem('blank comment', await call('POST', '/api/activities/feed/{id}/comments', hp, b, { text: ' ' }), 400, 'Activity.InvalidComment');
 expectProblem("delete someone else's comment", await call('DELETE', '/api/activities/feed/{id}/comments/{commentId}', { ...hp, commentId: comment?.id }, b), 403, 'Activity.NotCommentAuthor');
+expectProblem('report own comment', await call('POST', '/api/activities/feed/{id}/comments/{commentId}/report', { ...hp, commentId: comment?.id }, a, { reason: 'Spam' }), 400, 'Activity.CantReportOwnContent');
+expect('report comment', await call('POST', '/api/activities/feed/{id}/comments/{commentId}/report', { ...hp, commentId: comment?.id }, b, { reason: 'Harassment' }), 204);
+expect('report hike photo', await call('POST', '/api/activities/feed/{id}/photos/{photoId}/report', { ...hp, photoId: hikePhoto?.id }, b, { reason: 'Spam', details: 'Sweep' }), 204);
+expectProblem('report a missing hike photo', await call('POST', '/api/activities/feed/{id}/photos/{photoId}/report', { ...hp, photoId: missing }, b, { reason: 'Spam' }), 404, 'Activity.PhotoNotFound');
+expectProblem('content queue (not a moderator)', await call('GET', '/api/activities/moderation', {}, b), 403, 'Activity.NotModerator');
+expect('content queue (moderator)', await call('GET', '/api/activities/moderation', {}, moderator), 200, (q) => q.some((x) => x.contentId === comment?.id && x.kind === 'Comment' && x.openReports === 1) && q.some((x) => x.contentId === hikePhoto?.id && x.kind === 'HikePhoto'));
+expect('restore comment (moderator)', await call('PUT', '/api/activities/moderation/comments/{contentId}', { contentId: comment?.id }, moderator, { action: 'Restore' }), 204);
+expectProblem('moderate comment (not a moderator)', await call('PUT', '/api/activities/moderation/comments/{contentId}', { contentId: comment?.id }, b, { action: 'Hide' }), 403, 'Activity.NotModerator');
+expectProblem('moderate a missing comment', await call('PUT', '/api/activities/moderation/comments/{contentId}', { contentId: missing }, moderator, { action: 'Hide' }), 404, 'Activity.CommentNotFound');
+expect('hide hike photo (moderator)', await call('PUT', '/api/activities/moderation/photos/{contentId}', { contentId: hikePhoto?.id }, moderator, { action: 'Hide' }), 204);
+expect('hidden photo marked for the author', await call('GET', '/api/activities/{id}', hp, a), 200, (h) => h.photos.some((p) => p.id === hikePhoto?.id && p.hidden));
+expectProblem('moderate a missing hike photo', await call('PUT', '/api/activities/moderation/photos/{contentId}', { contentId: missing }, moderator, { action: 'Hide' }), 404, 'Activity.PhotoNotFound');
 expect('delete comment', await call('DELETE', '/api/activities/feed/{id}/comments/{commentId}', { ...hp, commentId: comment?.id }, a), 204);
 expect('delete hike photo', await call('DELETE', '/api/activities/{id}/photos/{photoId}', { ...hp, photoId: hikePhoto?.id }, a), 204);
 expect('unshare hike', await call('DELETE', '/api/activities/{id}/sharing', hp, a), 204);

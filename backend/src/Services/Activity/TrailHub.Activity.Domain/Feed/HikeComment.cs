@@ -20,6 +20,11 @@ public sealed class HikeComment : AggregateRoot<Guid>
 
     public DateTime CreatedAtUtc { get; private set; }
 
+    /// <summary>Set while the comment is hidden; hidden comments are only shown to their writer and moderators.</summary>
+    public HiddenBy? HiddenBy { get; private set; }
+
+    public bool IsHidden => HiddenBy is not null;
+
     /// <summary>Creates a comment; the text is trimmed and must then be 1 to <see cref="MaxTextLength"/> characters.</summary>
     public static Result<HikeComment> Create(Guid activityId, string userId, string? text, DateTime nowUtc)
     {
@@ -39,6 +44,28 @@ public sealed class HikeComment : AggregateRoot<Guid>
         };
     }
 
-    /// <summary>Commenters can delete their own comments; the hike's author can delete any comment on it.</summary>
-    public bool CanBeDeletedBy(string userId, string hikeAuthorId) => userId == UserId || userId == hikeAuthorId;
+    /// <summary>Commenters can delete their own comments; the hike's author and moderators can delete any comment on it.</summary>
+    public bool CanBeDeletedBy(string userId, string hikeAuthorId, bool isModerator = false) =>
+        userId == UserId || userId == hikeAuthorId || isModerator;
+
+    /// <summary>Anyone but the writer can report a comment.</summary>
+    public bool CanBeReportedBy(string userId) => userId != UserId;
+
+    /// <summary>Hidden comments exist only for their writer and moderators.</summary>
+    public bool IsVisibleTo(string userId, bool isModerator) => !IsHidden || userId == UserId || isModerator;
+
+    /// <summary>Hides the comment once it has enough open reports. Returns whether it was hidden now.</summary>
+    public bool ApplyReports(int openReportCount)
+    {
+        if (IsHidden || !ContentReport.ShouldAutoHide(openReportCount))
+        {
+            return false;
+        }
+
+        HiddenBy = Feed.HiddenBy.Reports;
+        return true;
+    }
+
+    /// <summary>A moderator hides the comment or restores it.</summary>
+    public void Moderate(bool hidden) => HiddenBy = hidden ? HiddenByRules.Hide(HiddenBy, Feed.HiddenBy.Moderator) : null;
 }

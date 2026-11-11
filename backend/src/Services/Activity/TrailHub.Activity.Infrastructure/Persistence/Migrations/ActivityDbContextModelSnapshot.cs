@@ -129,6 +129,52 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
                     b.ToTable("Activities", "activity");
                 });
 
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.ContentReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.HasIndex("ContentId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ContentReports", "activity");
+                });
+
             modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -139,6 +185,10 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HiddenBy")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -193,6 +243,15 @@ namespace TrailHub.Activity.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("KnownGroups", "activity");
+                });
+
+            modelBuilder.Entity("TrailHub.Activity.Domain.Feed.ContentReport", b =>
+                {
+                    b.HasOne("TrailHub.Activity.Domain.Activities.HikeActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TrailHub.Activity.Domain.Feed.HikeComment", b =>

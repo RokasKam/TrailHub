@@ -10,4 +10,7 @@ public interface ITrailPhotoService
     Task<TrailPhotoResponse> UploadAsync(Guid trailId, Stream content, string contentType, long length, string? caption, CancellationToken cancellationToken);
 
     Task AddAsync(Guid trailId, AddPhotoRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Removes a photo and its stored file. Allowed for its uploader, the trail's author and moderators.</summary>
+    Task DeleteAsync(Guid trailId, Guid photoId, CancellationToken cancellationToken);
 }

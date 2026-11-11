@@ -2,6 +2,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using TrailHub.Trails.Application.Interfaces.Providers;
 
 namespace TrailHub.Trails.Infrastructure.Photos;
@@ -18,11 +19,13 @@ internal sealed class S3PhotoStorage : IPhotoStorage, IDisposable
     private readonly string _bucket;
     private readonly string _publicBaseUrl;
     private readonly bool _createBucket;
+    private readonly ILogger<S3PhotoStorage> _logger;
     private readonly SemaphoreSlim _bucketLock = new(1, 1);
     private bool _bucketReady;
 
-    public S3PhotoStorage(IConfiguration configuration)
+    public S3PhotoStorage(IConfiguration configuration, ILogger<S3PhotoStorage> logger)
     {
+        _logger = logger;
         var section = configuration.GetSection("Photos");
         _bucket = section["Bucket"] ?? throw new InvalidOperationException("Photos:Bucket is not configured.");
         _createBucket = section.GetValue("CreateBucket", false);
@@ -60,6 +63,24 @@ internal sealed class S3PhotoStorage : IPhotoStorage, IDisposable
                 Headers = { CacheControl = "public, max-age=31536000, immutable" }, // keys are never reused
             },
             cancellationToken);
+    }
+
+    public async Task DeleteAsync(string key, CancellationToken cancellationToken)
+    {
+        if (Uri.TryCreate(key, UriKind.Absolute, out _))
+        {
+            return; // linked from elsewhere; nothing stored
+        }
+
+        try
+        {
+            await _s3.DeleteObjectAsync(new DeleteObjectRequest { BucketName = _bucket, Key = key }, cancellationToken);
+        }
+        catch (Exception ex) when (ex is AmazonServiceException or HttpRequestException or TaskCanceledException)
+        {
+            // Best effort: the photo is already removed from the trail; an orphaned object is harmless.
+            _logger.LogWarning(ex, "Could not delete trail photo {Key}", key);
+        }
     }
 
     public string ResolveUrl(string keyOrUrl) =>

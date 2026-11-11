@@ -19,5 +19,9 @@ public static class TrailErrors
     public static readonly Error NotModerator = Error.Forbidden("Trail.NotModerator", "Only moderators can do that.");
     public static readonly Error InvalidReport = Error.Validation("Trail.InvalidReport", $"Add details of at most {Community.TrailReport.MaxDetailsLength} characters.");
     public static readonly Error CantReportOwnTrail = Error.Validation("Trail.CantReportOwnTrail", "You can't report your own trail.");
+    public static readonly Error PhotoNotFound = Error.NotFound("Trail.PhotoNotFound", "The photo does not exist.");
+    public static readonly Error NotPhotoOwner = Error.Forbidden("Trail.NotPhotoOwner", "Only the photo's uploader, the trail's author or a moderator can delete it.");
+    public static readonly Error CantReportOwnContent = Error.Validation("Trail.CantReportOwnContent", "You can't report your own photo.");
+    public static readonly Error InvalidModerationAction = Error.Validation("Trail.InvalidModerationAction", "Action must be Restore, Hide or Delete.");
     public static readonly Error InvalidPhotoUrl = Error.Validation("Trail.InvalidPhotoUrl", "Photo URL must be an absolute https URL.");
 }

@@ -114,6 +114,8 @@ services:
       Photos__SecretKey: trailhub-photos-dev-secret
       Photos__CreateBucket: "true"
       Photos__PublicBaseUrl: ${PHOTOS_PUBLIC_BASE_URL:-http://localhost:8080/photos}
+      # Same moderator as Trails: reviews reported hike comments and photos.
+      Moderation__ModeratorUserIds__0: ${MODERATOR_USER_ID:-}
 
   trips-api:
     <<: *service

@@ -17,7 +17,9 @@ internal sealed class HikeFeedService(
     IActivityRepository activities,
     IHikeLikeRepository likes,
     IHikeCommentRepository comments,
+    IContentReportRepository reports,
     IGroupDirectory directory,
+    IModerators moderators,
     IHikePhotoStorage storage,
     IUnitOfWork unitOfWork,
     ICurrentUser user,
@@ -37,7 +39,8 @@ internal sealed class HikeFeedService(
         var ids = posts.Items.Select(a => a.Id).ToList();
         var likeCounts = await likes.GetCountsAsync(ids, cancellationToken);
         var liked = await likes.GetLikedAsync(ids, user.UserId, cancellationToken);
-        var commentCounts = await comments.GetCountsAsync(ids, cancellationToken);
+        var isModerator = moderators.IsModerator(user.UserId);
+        var commentCounts = await comments.GetCountsAsync(ids, user.UserId, isModerator, cancellationToken);
         var names = await NamesAsync(myGroups, posts.Items.Select(a => a.UserId), cancellationToken);
 
         var items = posts.Items
@@ -48,6 +51,7 @@ internal sealed class HikeFeedService(
                 likeCounts.GetValueOrDefault(a.Id),
                 liked.Contains(a.Id),
                 commentCounts.GetValueOrDefault(a.Id),
+                isModerator,
                 storage))
             .ToList();
         return new PagedResult<FeedPostResponse>(items, posts.Page, posts.PageSize, posts.TotalCount);
@@ -56,15 +60,18 @@ internal sealed class HikeFeedService(
     public async Task<FeedPostDetailsResponse> GetPostAsync(Guid id, CancellationToken cancellationToken)
     {
         var (activity, myGroups) = await GetVisibleAsync(id, cancellationToken);
-        var postComments = await comments.GetForActivityAsync(activity.Id, cancellationToken);
+        var isModerator = moderators.IsModerator(user.UserId);
+        var postComments = (await comments.GetForActivityAsync(activity.Id, cancellationToken))
+            .Where(c => c.IsVisibleTo(user.UserId, isModerator))
+            .ToList();
         var likeCount = (await likes.GetCountsAsync([activity.Id], cancellationToken)).GetValueOrDefault(activity.Id);
         var likedByMe = (await likes.GetLikedAsync([activity.Id], user.UserId, cancellationToken)).Contains(activity.Id);
         var names = await NamesAsync(myGroups, postComments.Select(c => c.UserId).Append(activity.UserId), cancellationToken);
 
-        var post = activity.ToFeedPost(user.UserId, names.For(activity.UserId, activity.SharedGroupIds), myGroups, likeCount, likedByMe, postComments.Count, storage);
+        var post = activity.ToFeedPost(user.UserId, names.For(activity.UserId, activity.SharedGroupIds), myGroups, likeCount, likedByMe, postComments.Count, isModerator, storage);
         var visible = activity.VisibleSegments(user.UserId);
         return post.ToDetails(
-            postComments.Select(c => c.ToResponse(names.For(c.UserId, activity.SharedGroupIds), user.UserId, activity.UserId)).ToList(),
+            postComments.Select(c => c.ToResponse(names.For(c.UserId, activity.SharedGroupIds), user.UserId, activity.UserId, isModerator)).ToList(),
             visible.Count == 0 ? [] : ElevationProfile.Build(visible));
     }
 
@@ -100,36 +107,34 @@ internal sealed class HikeFeedService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var names = await NamesAsync(myGroups, [user.UserId], cancellationToken);
-        return comment.ToResponse(names.For(user.UserId, activity.SharedGroupIds), user.UserId, activity.UserId);
+        return comment.ToResponse(names.For(user.UserId, activity.SharedGroupIds), user.UserId, activity.UserId, moderators.IsModerator(user.UserId));
     }
 
     public async Task DeleteCommentAsync(Guid id, Guid commentId, CancellationToken cancellationToken)
     {
-        var (activity, _) = await GetVisibleAsync(id, cancellationToken);
+        // Moderators can delete any comment, including on hikes they can't see in their feed.
+        var isModerator = moderators.IsModerator(user.UserId);
+        var activity = isModerator
+            ? await activities.GetByIdAsync(id, cancellationToken) ?? throw ActivityErrors.NotFound.ToException()
+            : (await GetVisibleAsync(id, cancellationToken)).Activity;
         var comment = await comments.GetByIdAsync(commentId, cancellationToken);
         if (comment is null || comment.ActivityId != activity.Id)
         {
             throw ActivityErrors.CommentNotFound.ToException();
         }
 
-        if (!comment.CanBeDeletedBy(user.UserId, activity.UserId))
+        if (!comment.CanBeDeletedBy(user.UserId, activity.UserId, isModerator))
         {
-            throw ActivityErrors.NotCommentAuthor.ToException();
+            throw (comment.IsVisibleTo(user.UserId, isModerator) ? ActivityErrors.NotCommentAuthor : ActivityErrors.CommentNotFound).ToException();
         }
 
         comments.Remove(comment);
+        await ContentRemoval.RemoveReportsAsync(comment.Id, reports, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>A post the caller can see (theirs, or shared with a group they're in now). Anything else is not found.</summary>
-    private async Task<(HikeActivity Activity, IReadOnlyList<GroupInfo> MyGroups)> GetVisibleAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var myGroups = await directory.GetForMemberAsync(user.UserId, cancellationToken);
-        var activity = await activities.GetByIdAsync(id, cancellationToken);
-        return activity is not null && activity.IsVisibleTo(user.UserId, myGroups.Select(g => g.Id).ToList())
-            ? (activity, myGroups)
-            : throw ActivityErrors.NotFound.ToException();
-    }
+    private Task<(HikeActivity Activity, IReadOnlyList<GroupInfo> MyGroups)> GetVisibleAsync(Guid id, CancellationToken cancellationToken) =>
+        activities.GetVisibleAsync(directory, id, user.UserId, cancellationToken);
 
     private async Task<int> LikeCountAsync(Guid activityId, CancellationToken cancellationToken) =>
         (await likes.GetCountsAsync([activityId], cancellationToken)).GetValueOrDefault(activityId);

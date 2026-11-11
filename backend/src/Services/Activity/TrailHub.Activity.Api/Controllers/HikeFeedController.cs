@@ -9,7 +9,7 @@ namespace TrailHub.Activity.Api.Controllers;
 
 /// <summary>Hikes shared with the caller's groups, with likes and comments.</summary>
 [Route("api/activities/feed")]
-public sealed class HikeFeedController(IHikeFeedService feedService) : ApiController
+public sealed class HikeFeedController(IHikeFeedService feedService, IContentModerationService moderationService) : ApiController
 {
     /// <summary>Hikes shared with the caller's groups (or one of them) and their own shared hikes, newest share first.</summary>
     [HttpGet]
@@ -50,7 +50,7 @@ public sealed class HikeFeedController(IHikeFeedService feedService) : ApiContro
         return CreatedAtAction(nameof(Get), new { id }, comment);
     }
 
-    /// <summary>Deletes a comment. Allowed for its author and the hike's author.</summary>
+    /// <summary>Deletes a comment. Allowed for its author, the hike's author and moderators.</summary>
     [HttpDelete("{id:guid}/comments/{commentId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -58,6 +58,30 @@ public sealed class HikeFeedController(IHikeFeedService feedService) : ApiContro
     public async Task<IActionResult> DeleteComment(Guid id, Guid commentId, CancellationToken ct)
     {
         await feedService.DeleteCommentAsync(id, commentId, ct);
+        return NoContent();
+    }
+
+    /// <summary>Reports a comment as inappropriate, spam or harassment. Reporting again updates your report.</summary>
+    /// <remarks>After 3 people report a comment it's hidden until a moderator reviews it.</remarks>
+    [HttpPost("{id:guid}/comments/{commentId:guid}/report")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReportComment(Guid id, Guid commentId, ReportContentRequest body, CancellationToken ct)
+    {
+        await moderationService.ReportCommentAsync(id, commentId, body, ct);
+        return NoContent();
+    }
+
+    /// <summary>Reports a hike photo as inappropriate, spam or harassment. Reporting again updates your report.</summary>
+    /// <remarks>After 3 people report a photo it's hidden until a moderator reviews it.</remarks>
+    [HttpPost("{id:guid}/photos/{photoId:guid}/report")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReportPhoto(Guid id, Guid photoId, ReportContentRequest body, CancellationToken ct)
+    {
+        await moderationService.ReportPhotoAsync(id, photoId, body, ct);
         return NoContent();
     }
 }

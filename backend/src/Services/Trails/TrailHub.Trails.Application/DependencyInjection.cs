@@ -15,5 +15,6 @@ public static class DependencyInjection
             .AddScoped<IConditionReportService, ConditionReportService>()
             .AddScoped<IFavoriteTrailService, FavoriteTrailService>()
             .AddScoped<IModerationService, ModerationService>()
+            .AddScoped<IPhotoModerationService, PhotoModerationService>()
             .AddScoped<IPublishedRouteService, PublishedRouteService>();
 }

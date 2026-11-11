@@ -5,7 +5,8 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } fro
 
 import { MAX_HIKE_PHOTOS, useActivity, useDeleteHikePhoto, useSaveSharing, useShareTargets, useStopSharing, useUploadHikePhoto } from '@/api/activities';
 import { PRIVACY_LABELS } from '@/components/feed-post-card';
-import { PhotoViewer } from '@/components/hike-photos';
+import { HikePhotoViewer } from '@/components/hike-photos';
+import { HiddenThumbBadge } from '@/components/photo-viewer';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, EmptyState, Icon, Input, QueryState, Section, Segmented } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -215,7 +216,8 @@ export function HikePhotoEditor({ activityId, photos }: { activityId: string; ph
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStrip}>
         {photos.map((p) => (
           <Pressable key={p.id} onPress={() => setOpen(p)} accessibilityLabel={p.caption ?? 'Hike photo'} style={styles.tile}>
-            <Image source={{ uri: p.url }} style={styles.tileImage} contentFit="cover" transition={150} />
+            <Image source={{ uri: p.url }} style={[styles.tileImage, p.hidden && { opacity: 0.45 }]} contentFit="cover" transition={150} />
+            {p.hidden && removing !== p.id && <HiddenThumbBadge compact />}
             {removing === p.id ? (
               <View style={styles.tileOverlay}>
                 <ActivityIndicator color="#fff" />
@@ -251,7 +253,7 @@ export function HikePhotoEditor({ activityId, photos }: { activityId: string; ph
           </Pressable>
         )}
       </ScrollView>
-      <PhotoViewer photo={open} onClose={() => setOpen(null)} />
+      <HikePhotoViewer photo={open} onClose={() => setOpen(null)} />
     </Section>
   );
 }

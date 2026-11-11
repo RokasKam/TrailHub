@@ -222,7 +222,7 @@ public sealed class Trail : AggregateRoot<Guid>
             return TrailErrors.InvalidPhotoUrl;
         }
 
-        _photos.Add(new TrailPhoto(uri.ToString(), string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(), uploadedBy, nowUtc));
+        _photos.Add(TrailPhoto.Create(uri.ToString(), caption, uploadedBy, nowUtc));
         return Result.Success();
     }
 
@@ -230,7 +230,7 @@ public sealed class Trail : AggregateRoot<Guid>
     /// Adds a photo uploaded to TrailHub's own storage. <paramref name="storageKey"/> must live under
     /// this trail's prefix (see <see cref="PhotoKeyPrefix"/>), so one trail can't claim another's files.
     /// </summary>
-    public Result AddUploadedPhoto(string storageKey, string? caption, string uploadedBy, DateTime nowUtc)
+    public Result<TrailPhoto> AddUploadedPhoto(string storageKey, string? caption, string uploadedBy, DateTime nowUtc)
     {
         if (_photos.Count >= MaxPhotos)
         {
@@ -242,7 +242,71 @@ public sealed class Trail : AggregateRoot<Guid>
             return TrailErrors.InvalidPhotoUrl;
         }
 
-        _photos.Add(new TrailPhoto(storageKey, string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(), uploadedBy, nowUtc));
+        var photo = TrailPhoto.Create(storageKey, caption, uploadedBy, nowUtc);
+        _photos.Add(photo);
+        return photo;
+    }
+
+    /// <summary>A photo <paramref name="userId"/> can see: hidden photos exist only for their uploader and moderators.</summary>
+    public Result<TrailPhoto> GetVisiblePhoto(Guid photoId, string userId, bool isModerator) =>
+        _photos.FirstOrDefault(p => p.Id == photoId) is { } photo && photo.IsVisibleTo(userId, isModerator)
+            ? photo
+            : TrailErrors.PhotoNotFound;
+
+    /// <summary>The uploader, the trail's author and moderators can delete a photo.</summary>
+    public bool CanDeletePhoto(TrailPhoto photo, string userId, bool isModerator) =>
+        photo.UploadedBy == userId || CreatedBy == userId || isModerator;
+
+    /// <summary>Removes a photo (if the caller may) and returns it, so its stored file can be deleted.</summary>
+    public Result<TrailPhoto> RemovePhoto(Guid photoId, string userId, bool isModerator)
+    {
+        if (_photos.FirstOrDefault(p => p.Id == photoId) is not { } photo)
+        {
+            return TrailErrors.PhotoNotFound;
+        }
+
+        if (!CanDeletePhoto(photo, userId, isModerator))
+        {
+            // Someone who can't see a hidden photo doesn't learn that it exists.
+            return photo.IsVisibleTo(userId, isModerator) ? TrailErrors.NotPhotoOwner : TrailErrors.PhotoNotFound;
+        }
+
+        _photos.Remove(photo);
+        return photo;
+    }
+
+    /// <summary>
+    /// Hides a photo once it has <see cref="AutoHideReportCount"/> open reports from different people. Returns whether
+    /// the photo is now hidden by reports.
+    /// </summary>
+    public bool ApplyPhotoReports(Guid photoId, int openReportCount)
+    {
+        if (openReportCount < AutoHideReportCount || _photos.FirstOrDefault(p => p.Id == photoId) is not { } photo || photo.IsHidden)
+        {
+            return false;
+        }
+
+        photo.Hide(Trails.HiddenBy.Reports);
+        return true;
+    }
+
+    /// <summary>A moderator hides a photo, or restores a hidden one.</summary>
+    public Result ModeratePhoto(Guid photoId, bool hidden)
+    {
+        if (_photos.FirstOrDefault(p => p.Id == photoId) is not { } photo)
+        {
+            return TrailErrors.PhotoNotFound;
+        }
+
+        if (hidden)
+        {
+            photo.Hide(Trails.HiddenBy.Moderator);
+        }
+        else
+        {
+            photo.Unhide();
+        }
+
         return Result.Success();
     }
 

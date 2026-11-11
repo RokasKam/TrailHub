@@ -8,6 +8,15 @@ public interface IActivityRepository
 {
     Task<HikeActivity?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The hike that has the photo, or null.</summary>
+    Task<HikeActivity?> FindByPhotoIdAsync(Guid photoId, CancellationToken cancellationToken);
+
+    /// <summary>Read-only copies of hikes, for the moderators' queue.</summary>
+    Task<IReadOnlyList<HikeActivity>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Ids of hikes with a hidden photo.</summary>
+    Task<IReadOnlyList<Guid>> GetIdsWithHiddenPhotosAsync(CancellationToken cancellationToken);
+
     void Add(HikeActivity activity);
 
     void Remove(HikeActivity activity);

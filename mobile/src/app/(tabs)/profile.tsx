@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
 
 import { useAchievements, useProfile, useUpdatePreferences, useUpdateProfile } from '@/api/profile';
-import { useModerationQueue } from '@/api/trails';
+import { useContentModerationQueue } from '@/api/feed';
+import { useModerationQueue, usePhotoModerationQueue } from '@/api/trails';
 import { useSession } from '@/auth/session';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Icon, IconButton, Input, List, ListRow, QueryState, Screen, Section, Segmented, Stat, StatRow } from '@/components/ui';
@@ -19,7 +20,12 @@ export default function ProfileScreen() {
   const profile = useProfile();
   const achievements = useAchievements();
   const updatePreferences = useUpdatePreferences();
-  const moderation = useModerationQueue(); // 403 for non-moderators, so the row only shows for moderators
+  // The queues answer 403 for non-moderators, so the row only shows for moderators (of either service).
+  const trailQueue = useModerationQueue();
+  const photoQueue = usePhotoModerationQueue();
+  const contentQueue = useContentModerationQueue();
+  const isModerator = trailQueue.isSuccess || photoQueue.isSuccess || contentQueue.isSuccess;
+  const toReview = (trailQueue.data?.length ?? 0) + (photoQueue.data?.length ?? 0) + (contentQueue.data?.length ?? 0);
   const updateProfile = useUpdateProfile();
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -103,12 +109,12 @@ export default function ProfileScreen() {
         <ListRow icon="map.fill" iconColor="#EA580C" title="Trips" detail="Multi-day plans and checklists" onPress={() => router.push('/trips')} />
         <ListRow icon="person.3.fill" iconColor="#2563EB" title="Groups" detail="Hike together, share your location" onPress={() => router.push('/groups')} />
         <ListRow icon="checklist" iconColor="#1F7A4D" title="Gear lists" detail="Reusable packing lists for your trips" onPress={() => router.push('/gear')} />
-        {moderation.isSuccess && (
+        {isModerator && (
           <ListRow
             icon="checkmark.shield.fill"
             iconColor="#7C3AED"
             title="Moderation"
-            detail={moderation.data.length ? `${moderation.data.length} trail${moderation.data.length === 1 ? '' : 's'} to review` : 'Nothing to review'}
+            detail={toReview ? `${toReview} item${toReview === 1 ? '' : 's'} to review` : 'Nothing to review'}
             onPress={() => router.push('/moderation')}
           />
         )}

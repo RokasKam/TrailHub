@@ -17,15 +17,24 @@ internal sealed class HikeCommentRepository(ActivityDbContext db) : IHikeComment
             .ThenBy(c => c.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, int>> GetCountsAsync(IReadOnlyCollection<Guid> activityIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, int>> GetCountsAsync(IReadOnlyCollection<Guid> activityIds, string viewerId, bool includeHidden, CancellationToken cancellationToken)
     {
         var ids = activityIds.ToArray();
         return await db.HikeComments
-            .Where(c => ids.Contains(c.ActivityId))
+            .Where(c => ids.Contains(c.ActivityId) && (includeHidden || c.HiddenBy == null || c.UserId == viewerId))
             .GroupBy(c => c.ActivityId)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<HikeComment>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var array = ids.ToArray();
+        return await db.HikeComments.AsNoTracking().Where(c => array.Contains(c.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<HikeComment>> GetHiddenAsync(CancellationToken cancellationToken) =>
+        await db.HikeComments.AsNoTracking().Where(c => c.HiddenBy != null).ToListAsync(cancellationToken);
 
     public void Add(HikeComment comment) => db.HikeComments.Add(comment);
 

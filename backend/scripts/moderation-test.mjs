@@ -31,7 +31,7 @@ const check = (name, ok) => {
 const stamp = Date.now();
 const author = `mod-author-${stamp}`;
 const name = `Moderation test ${stamp}`;
-const inSearch = async () => (await call('TRAILS', 'GET', `/api/trails?query=${encodeURIComponent(name)}`, 'someone')).body?.items?.some((t) => t.name === name);
+const inSearch = async () => (await call('TRAILS', 'GET', `/api/trails?q=${encodeURIComponent(name)}`, 'someone')).body?.items?.some((t) => t.name === name);
 
 // A trail to report: imported from the sample GPX.
 const form = new FormData();

@@ -3,16 +3,20 @@ import { type ComponentRef, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAddComment, useDeleteComment, useFeedPost } from '@/api/feed';
+import { useAddComment, useDeleteComment, useFeedPost, useModerateContent, useReportComment } from '@/api/feed';
 import { useUnits } from '@/api/profile';
+import { useSession } from '@/auth/session';
 import { ElevationChart } from '@/components/charts';
 import { Avatar, LikeButton, PostByline, useTrackLine } from '@/components/feed-post-card';
 import { HikePhotoStrip } from '@/components/hike-photos';
+import { HIDDEN_AFTER_REPORTS } from '@/components/photo-viewer';
+import { CONTENT_REPORT_REASONS, ReportSheet } from '@/components/report-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { TrailMap } from '@/components/trail-map';
 import { Badge, Button, Card, EmptyState, Icon, QueryState, Screen, Section, Stat, StatRow } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { confirmDelete, type SheetAction, showActions } from '@/lib/action-sheet';
 import { ApiError, describeError } from '@/lib/api';
 import { formatDate, formatDistance, formatDuration, formatElevation, formatTimeAgo } from '@/lib/format';
 import type { FeedComment, FeedPostDetails } from '@/lib/types';
@@ -115,7 +119,7 @@ function PostView({ post, refreshing, onRefresh }: { post: FeedPostDetails; refr
 
           {post.photos.length > 0 && (
             <Section title="Photos">
-              <HikePhotoStrip photos={post.photos} />
+              <HikePhotoStrip photos={post.photos} post={post} />
             </Section>
           )}
 
@@ -134,7 +138,7 @@ function PostView({ post, refreshing, onRefresh }: { post: FeedPostDetails; refr
             ) : (
               <Card style={styles.comments}>
                 {post.comments.map((c, i) => (
-                  <CommentRow key={c.id} postId={post.activityId} comment={c} first={i === 0} />
+                  <CommentRow key={c.id} post={post} comment={c} first={i === 0} />
                 ))}
               </Card>
             )}
@@ -146,36 +150,69 @@ function PostView({ post, refreshing, onRefresh }: { post: FeedPostDetails; refr
   );
 }
 
-function CommentRow({ postId, comment, first }: { postId: string; comment: FeedComment; first: boolean }) {
+function CommentRow({ post, comment, first }: { post: FeedPostDetails; comment: FeedComment; first: boolean }) {
   const theme = useTheme();
-  const remove = useDeleteComment(postId);
-  const confirm = () =>
-    Alert.alert('Delete comment?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => remove.mutate(comment.id, { onError: (e) => Alert.alert('Couldn’t delete comment', describeError(e)) }) },
-    ]);
+  const { user } = useSession();
+  const remove = useDeleteComment(post.activityId);
+  const moderate = useModerateContent();
+  const report = useReportComment(post.activityId);
+  const [reporting, setReporting] = useState(false);
+  const busy = remove.isPending || moderate.isPending;
+
+  // The writer and the post's author delete directly; anyone else allowed to (a moderator) through moderation.
+  const doDelete = () => {
+    const onError = (e: Error) => Alert.alert('Couldn’t delete comment', describeError(e));
+    if (comment.author.userId === user?.id || post.isMine) remove.mutate(comment.id, { onError });
+    else moderate.mutate({ kind: 'comments', contentId: comment.id, action: 'Delete' }, { onError });
+  };
+  const actions: SheetAction[] = [
+    ...(comment.canReport ? [{ label: 'Report comment', onPress: () => setReporting(true) }] : []),
+    ...(comment.canDelete ? [{ label: 'Delete comment', destructive: true, onPress: () => confirmDelete('Delete comment?', undefined, doDelete) }] : []),
+  ];
+
   return (
     <View style={[styles.comment, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator }]}>
-      <Avatar name={comment.author.displayName} size={30} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <View style={styles.commentHeader}>
-          <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {comment.author.displayName}
-          </ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary">
-            {formatTimeAgo(comment.createdAtUtc)}
-          </ThemedText>
+      <View style={[styles.commentBody, comment.hidden && styles.hidden]}>
+        <Avatar name={comment.author.displayName} size={30} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={styles.commentHeader}>
+            <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {comment.author.displayName}
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {formatTimeAgo(comment.createdAtUtc)}
+            </ThemedText>
+          </View>
+          <ThemedText type="small">{comment.text}</ThemedText>
+          {comment.hidden && (
+            <View style={styles.hiddenNote}>
+              <Icon name="eye.slash.fill" size={11} color="#B45309" />
+              <ThemedText type="caption" style={{ color: '#B45309', fontWeight: 700 }}>
+                {HIDDEN_AFTER_REPORTS}
+              </ThemedText>
+            </View>
+          )}
         </View>
-        <ThemedText type="small">{comment.text}</ThemedText>
       </View>
-      {comment.canDelete &&
-        (remove.isPending ? (
-          <ActivityIndicator size="small" />
-        ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Delete comment" hitSlop={10} onPress={confirm}>
-            <Icon name="trash" size={15} color={theme.textSecondary} />
+      {busy ? (
+        <ActivityIndicator size="small" />
+      ) : (
+        actions.length > 0 && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Comment actions" hitSlop={10} onPress={() => showActions(undefined, actions)} style={styles.more}>
+            <Icon name="ellipsis" size={15} color={theme.textSecondary} />
           </Pressable>
-        ))}
+        )
+      )}
+      {comment.canReport && (
+        <ReportSheet
+          visible={reporting}
+          onClose={() => setReporting(false)}
+          title="Report comment"
+          subtitle={`“${comment.text.length > 80 ? `${comment.text.slice(0, 80)}…` : comment.text}”`}
+          reasons={CONTENT_REPORT_REASONS}
+          onSubmit={(r) => report.mutateAsync({ commentId: comment.id, ...r })}
+        />
+      )}
     </View>
   );
 }
@@ -225,7 +262,11 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   likeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: Spacing.two + 2 },
   comments: { paddingVertical: Spacing.one, gap: 0 },
-  comment: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two + 2, paddingVertical: Spacing.two + 2 },
+  comment: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, paddingVertical: Spacing.two + 2 },
+  commentBody: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two + 2 },
+  hidden: { opacity: 0.55 },
+  hiddenNote: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  more: { paddingTop: 2 },
   commentHeader: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two, borderTopWidth: StyleSheet.hairlineWidth },
   composerInput: { flex: 1, minHeight: 40, maxHeight: 120, borderRadius: Radius.medium, borderCurve: 'continuous', paddingHorizontal: Spacing.three, paddingTop: 10, paddingBottom: 10, fontSize: 16 },

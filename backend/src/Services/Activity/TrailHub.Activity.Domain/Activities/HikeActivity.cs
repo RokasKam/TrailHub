@@ -1,3 +1,4 @@
+using TrailHub.Activity.Domain.Feed;
 using TrailHub.BuildingBlocks.Domain;
 using TrailHub.BuildingBlocks.Domain.Geo;
 
@@ -264,6 +265,42 @@ public sealed class HikeActivity : AggregateRoot<Guid>
         Photos = Photos.Where(p => p.Id != photoId).ToList();
         return photo;
     }
+
+    /// <summary>A photo <paramref name="userId"/> can see; hidden photos exist only for the author and moderators.</summary>
+    public Result<HikePhoto> GetVisiblePhoto(Guid photoId, string userId, bool isModerator) =>
+        Photos.FirstOrDefault(p => p.Id == photoId) is { } photo && photo.IsVisibleTo(userId, UserId, isModerator)
+            ? photo
+            : ActivityErrors.PhotoNotFound;
+
+    /// <summary>The hike's author and moderators can delete its photos.</summary>
+    public bool CanDeletePhotos(string userId, bool isModerator) => userId == UserId || isModerator;
+
+    /// <summary>Hides a photo once it has enough open reports. Returns whether it was hidden now.</summary>
+    public bool ApplyPhotoReports(Guid photoId, int openReportCount)
+    {
+        if (!ContentReport.ShouldAutoHide(openReportCount) || Photos.FirstOrDefault(p => p.Id == photoId) is not { HiddenBy: null })
+        {
+            return false;
+        }
+
+        SetPhotoHiddenBy(photoId, HiddenBy.Reports);
+        return true;
+    }
+
+    /// <summary>A moderator hides a photo or restores it.</summary>
+    public Result ModeratePhoto(Guid photoId, bool hidden)
+    {
+        if (Photos.FirstOrDefault(p => p.Id == photoId) is not { } photo)
+        {
+            return ActivityErrors.PhotoNotFound;
+        }
+
+        SetPhotoHiddenBy(photoId, hidden ? HiddenByRules.Hide(photo.HiddenBy, HiddenBy.Moderator) : null);
+        return Result.Success();
+    }
+
+    private void SetPhotoHiddenBy(Guid photoId, HiddenBy? hiddenBy) =>
+        Photos = Photos.Select(p => p.Id == photoId ? p with { HiddenBy = hiddenBy } : p).ToList();
 
     private void CalculateMetrics()
     {

@@ -57,6 +57,7 @@ internal sealed class TrailService(
         var isFavorite = await favorites.GetAsync(user.UserId, trail.Id, cancellationToken) is not null;
         var recent = await conditions.GetRecentAsync(trail.Id, 1, cancellationToken);
         var latest = recent.Count > 0 ? recent[0] : null;
+        var isModerator = moderators.IsModerator(user.UserId);
 
         return new TrailDetailsResponse(
             trail.Id,
@@ -78,10 +79,14 @@ internal sealed class TrailService(
             trail.CreatedBy,
             trail.CreatedAtUtc,
             trail.PointsOfInterest.Select(p => p.ToResponse()).ToList(),
-            trail.Photos.Select(p => new TrailPhotoResponse(photos.ResolveUrl(p.Url), p.Caption, p.UploadedAtUtc)).ToList(),
+            trail.Photos
+                .Where(p => p.IsVisibleTo(user.UserId, isModerator))
+                .OrderBy(p => p.UploadedAtUtc)
+                .Select(p => p.ToResponse(trail, photos, user.UserId, isModerator))
+                .ToList(),
             latest?.ToResponse(),
             trail.HiddenBy,
-            moderators.IsModerator(user.UserId));
+            isModerator);
     }
 
     public async Task<TrailRouteResponse> GetRouteAsync(Guid trailId, int? maxPoints, CancellationToken cancellationToken)

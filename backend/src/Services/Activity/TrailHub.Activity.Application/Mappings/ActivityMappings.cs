@@ -40,6 +40,7 @@ internal static class ActivityMappings
     public static HikeSharingResponse? ToSharing(this HikeActivity a) =>
         a.SharedAtUtc is { } sharedAt ? new HikeSharingResponse(a.SharedGroupIds, a.Caption, a.Privacy, sharedAt) : null;
 
-    public static HikePhotoResponse ToResponse(this HikePhoto p, IHikePhotoStorage storage) =>
-        new(p.Id, storage.ResolveUrl(p.Key), p.Caption, p.AddedAtUtc);
+    /// <summary>A photo as <paramref name="viewerIsAuthor"/> (the hike's author, by default) or someone else sees it.</summary>
+    public static HikePhotoResponse ToResponse(this HikePhoto p, IHikePhotoStorage storage, bool viewerIsAuthor = true, bool viewerIsModerator = false) =>
+        new(p.Id, storage.ResolveUrl(p.Key), p.Caption, p.AddedAtUtc, p.HiddenBy is not null, !viewerIsAuthor, viewerIsAuthor || viewerIsModerator);
 }

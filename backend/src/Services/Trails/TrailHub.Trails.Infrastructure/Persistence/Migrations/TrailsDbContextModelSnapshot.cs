@@ -19,7 +19,7 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("trails")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
@@ -76,6 +76,48 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
                     b.HasIndex("TrailId");
 
                     b.ToTable("Favorites", "trails");
+                });
+
+            modelBuilder.Entity("TrailHub.Trails.Domain.Community.PhotoReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("PhotoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TrailId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrailId");
+
+                    b.HasIndex("PhotoId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PhotoReports", "trails");
                 });
 
             modelBuilder.Entity("TrailHub.Trails.Domain.Community.Review", b =>
@@ -277,6 +319,15 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TrailHub.Trails.Domain.Community.PhotoReport", b =>
+                {
+                    b.HasOne("TrailHub.Trails.Domain.Trails.Trail", null)
+                        .WithMany()
+                        .HasForeignKey("TrailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TrailHub.Trails.Domain.Community.Review", b =>
                 {
                     b.HasOne("TrailHub.Trails.Domain.Trails.Trail", null)
@@ -359,15 +410,16 @@ namespace TrailHub.Trails.Infrastructure.Persistence.Migrations
 
                     b.OwnsMany("TrailHub.Trails.Domain.Trails.TrailPhoto", "Photos", b1 =>
                         {
-                            b1.Property<int>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("integer");
-
-                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("Id"));
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("Caption")
                                 .HasMaxLength(500)
                                 .HasColumnType("character varying(500)");
+
+                            b1.Property<string>("HiddenBy")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
 
                             b1.Property<Guid>("TrailId")
                                 .HasColumnType("uuid");

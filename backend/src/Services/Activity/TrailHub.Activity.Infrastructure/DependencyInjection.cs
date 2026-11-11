@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TrailHub.Activity.Application.Interfaces.Providers;
 using TrailHub.Activity.Application.Interfaces.Repository;
 using TrailHub.Activity.Infrastructure.Consumers;
+using TrailHub.Activity.Infrastructure.Moderation;
 using TrailHub.Activity.Infrastructure.Persistence;
 using TrailHub.Activity.Infrastructure.Photos;
 using TrailHub.Activity.Infrastructure.Repositories;
@@ -27,6 +28,8 @@ public static class DependencyInjection
         services.AddScoped<IHikeLikeRepository, HikeLikeRepository>();
         services.AddScoped<IHikeCommentRepository, HikeCommentRepository>();
         services.AddScoped<IGroupDirectory, GroupDirectory>();
+        services.AddScoped<IContentReportRepository, ContentReportRepository>();
+        services.AddSingleton<IModerators>(new ConfiguredModerators(configuration.GetSection("Moderation:ModeratorUserIds").Get<string[]>() ?? []));
         services.AddSingleton<IHikePhotoStorage, S3HikePhotoStorage>();
 
         services.AddGpxSupport();

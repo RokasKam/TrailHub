@@ -18,6 +18,8 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
 
     public DbSet<HikeComment> HikeComments => Set<HikeComment>();
 
+    public DbSet<ContentReport> ContentReports => Set<ContentReport>();
+
     internal DbSet<KnownGroup> KnownGroups => Set<KnownGroup>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -42,6 +44,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
         modelBuilder.ApplyConfiguration(new HikeActivityConfiguration());
         modelBuilder.ApplyConfiguration(new HikeLikeConfiguration());
         modelBuilder.ApplyConfiguration(new HikeCommentConfiguration());
+        modelBuilder.ApplyConfiguration(new ContentReportConfiguration());
         modelBuilder.ApplyConfiguration(new KnownGroupConfiguration());
     }
 }

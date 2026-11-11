@@ -29,5 +29,9 @@ public static class ActivityErrors
     public static readonly Error GroupNotFound = Error.NotFound("Activity.GroupNotFound", "You're not a member of that group.");
     public static readonly Error InvalidComment = Error.Validation("Activity.InvalidComment", $"A comment must be 1 to {HikeComment.MaxTextLength} characters.");
     public static readonly Error CommentNotFound = Error.NotFound("Activity.CommentNotFound", "The comment does not exist.");
-    public static readonly Error NotCommentAuthor = Error.Forbidden("Activity.NotCommentAuthor", "Only the comment's author or the hike's author can delete it.");
+    public static readonly Error CantReportOwnContent = Error.Validation("Activity.CantReportOwnContent", "You can't report your own comments or photos.");
+    public static readonly Error InvalidReport = Error.Validation("Activity.InvalidReport", $"Pick a reason and add details of at most {ContentReport.MaxDetailsLength} characters.");
+    public static readonly Error NotModerator = Error.Forbidden("Activity.NotModerator", "Only moderators can do that.");
+    public static readonly Error InvalidModerationAction = Error.Validation("Activity.InvalidModerationAction", "Action must be Restore, Hide or Delete.");
+    public static readonly Error NotCommentAuthor = Error.Forbidden("Activity.NotCommentAuthor", "Only the comment's author, the hike's author or a moderator can delete it.");
 }

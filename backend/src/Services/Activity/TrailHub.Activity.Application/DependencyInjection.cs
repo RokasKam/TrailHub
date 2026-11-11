@@ -12,5 +12,6 @@ public static class DependencyInjection
             .AddScoped<IHikeSharingService, HikeSharingService>()
             .AddScoped<IHikePhotoService, HikePhotoService>()
             .AddScoped<IHikeFeedService, HikeFeedService>()
+            .AddScoped<IContentModerationService, ContentModerationService>()
             .AddScoped<IGroupMembershipService, GroupMembershipService>();
 }

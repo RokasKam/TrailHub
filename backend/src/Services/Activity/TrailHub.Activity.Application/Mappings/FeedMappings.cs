@@ -32,6 +32,7 @@ internal static class FeedMappings
         int likeCount,
         bool likedByMe,
         int commentCount,
+        bool viewerIsModerator,
         IHikePhotoStorage storage) =>
         new(
             a.Id,
@@ -45,7 +46,10 @@ internal static class FeedMappings
             a.MovingDurationSeconds,
             a.Privacy,
             ToPreviewTrack(a.VisibleSegments(viewerId)),
-            a.Photos.Select(p => p.ToResponse(storage)).ToList(),
+            a.Photos
+                .Where(p => p.IsVisibleTo(viewerId, a.UserId, viewerIsModerator))
+                .Select(p => p.ToResponse(storage, a.UserId == viewerId, viewerIsModerator))
+                .ToList(),
             viewerGroups.Where(g => a.SharedGroupIds.Contains(g.Id)).Select(g => new FeedGroupResponse(g.Id, g.Name)).ToList(),
             likeCount,
             likedByMe,
@@ -74,6 +78,13 @@ internal static class FeedMappings
             comments,
             elevationProfile);
 
-    public static CommentResponse ToResponse(this HikeComment c, string authorName, string viewerId, string hikeAuthorId) =>
-        new(c.Id, new FeedUserResponse(c.UserId, authorName), c.Text, c.CreatedAtUtc, c.CanBeDeletedBy(viewerId, hikeAuthorId));
+    public static CommentResponse ToResponse(this HikeComment c, string authorName, string viewerId, string hikeAuthorId, bool viewerIsModerator) =>
+        new(
+            c.Id,
+            new FeedUserResponse(c.UserId, authorName),
+            c.Text,
+            c.CreatedAtUtc,
+            c.CanBeDeletedBy(viewerId, hikeAuthorId, viewerIsModerator),
+            c.CanBeReportedBy(viewerId),
+            c.IsHidden);
 }

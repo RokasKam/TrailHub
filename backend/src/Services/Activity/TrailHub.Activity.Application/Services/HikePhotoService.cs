@@ -11,7 +11,9 @@ namespace TrailHub.Activity.Application.Services;
 
 internal sealed class HikePhotoService(
     IActivityRepository activities,
+    IContentReportRepository reports,
     IHikePhotoStorage storage,
+    IModerators moderators,
     IUnitOfWork unitOfWork,
     ICurrentUser user,
     TimeProvider clock) : IHikePhotoService
@@ -50,9 +52,11 @@ internal sealed class HikePhotoService(
 
     public async Task DeleteAsync(Guid id, Guid photoId, CancellationToken cancellationToken)
     {
-        var activity = await activities.GetOwnAsync(id, user.UserId, cancellationToken);
+        // Moderators can delete any hike's photos; to everyone else other people's hikes don't exist here.
+        var activity = moderators.IsModerator(user.UserId)
+            ? await activities.GetByIdAsync(id, cancellationToken) ?? throw ActivityErrors.NotFound.ToException()
+            : await activities.GetOwnAsync(id, user.UserId, cancellationToken);
         var photo = activity.RemovePhoto(photoId).GetValueOrThrow();
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await storage.DeleteAsync(photo.Key, cancellationToken);
+        await ContentRemoval.CompletePhotoAsync(photo, reports, storage, unitOfWork, cancellationToken);
     }
 }

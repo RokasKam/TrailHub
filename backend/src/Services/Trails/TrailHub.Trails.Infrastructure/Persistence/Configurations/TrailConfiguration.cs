@@ -60,11 +60,14 @@ internal sealed class TrailConfiguration : IEntityTypeConfiguration<Trail>
         {
             photo.ToTable("TrailPhotos");
             photo.WithOwner().HasForeignKey("TrailId");
-            photo.Property<int>("Id");
-            photo.HasKey("Id");
+            photo.HasKey(p => p.Id);
+            photo.Property(p => p.Id).ValueGeneratedNever();
             photo.Property(p => p.Url).HasMaxLength(2048).IsRequired();
             photo.Property(p => p.Caption).HasMaxLength(500);
             photo.Property(p => p.UploadedBy).HasMaxLength(128).IsRequired();
+            photo.Property(p => p.HiddenBy).HasConversion<string>().HasMaxLength(20);
+            photo.Ignore(p => p.IsHidden);
+            photo.Ignore(p => p.IsStored);
         });
     }
 }

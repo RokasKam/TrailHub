@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddSingleton<IPhotoStorage, S3PhotoStorage>();
         services.AddGpxSupport();
         services.AddScoped<ITrailReportRepository, TrailReportRepository>();
+        services.AddScoped<IPhotoReportRepository, PhotoReportRepository>();
         services.AddSingleton<IModerators>(new ConfiguredModerators(configuration.GetSection("Moderation:ModeratorUserIds").Get<string[]>() ?? []));
         services.AddTrailHubMessaging(configuration, bus =>
         {

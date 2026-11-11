@@ -136,4 +136,15 @@ public sealed class TrailsController(
         await photoService.AddAsync(id, body, ct);
         return NoContent();
     }
+
+    /// <summary>Removes a photo (and its stored file). Allowed for its uploader, the trail's author and moderators.</summary>
+    [HttpDelete("{id:guid}/photos/{photoId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeletePhoto(Guid id, Guid photoId, CancellationToken ct)
+    {
+        await photoService.DeleteAsync(id, photoId, ct);
+        return NoContent();
+    }
 }

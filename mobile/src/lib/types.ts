@@ -45,11 +45,22 @@ export type TrailDetails = TrailSummary & {
   createdBy: string;
   createdAtUtc: string;
   pointsOfInterest: PointOfInterest[];
-  photos: { url: string; caption: string | null; uploadedAtUtc: string }[];
+  photos: TrailPhoto[];
   latestCondition: ConditionReport | null;
   /** Set when the trail is out of Discover (only its author and moderators can still open it). */
   hiddenBy: 'Author' | 'Reports' | 'Moderator' | null;
   viewerIsModerator: boolean;
+};
+/** Hidden photos only reach their uploader and moderators (`hidden: true`); everyone else doesn't get them. */
+export type TrailPhoto = {
+  id: string;
+  url: string;
+  caption: string | null;
+  uploadedAtUtc: string;
+  uploadedBy: string;
+  hidden: boolean;
+  /** The uploader, the trail's author or a moderator. */
+  canDelete: boolean;
 };
 export type ReportReason = 'Inaccurate' | 'Dangerous' | 'Inappropriate' | 'Spam' | 'Other';
 export type ModerationItem = {
@@ -60,6 +71,40 @@ export type ModerationItem = {
   hiddenBy: 'Author' | 'Reports' | 'Moderator' | null;
   openReports: number;
   reports: { reason: ReportReason; details: string | null; createdAtUtc: string }[];
+};
+
+// Reporting photos and comments --------------------------------------------------------
+
+export type ContentReportReason = 'Inappropriate' | 'Spam' | 'Harassment' | 'Other';
+export type ContentHiddenBy = 'Reports' | 'Moderator' | null;
+export type ModerationAction = 'Restore' | 'Hide' | 'Delete';
+export type ContentReport = { userId: string; reason: ContentReportReason; details: string | null; createdAtUtc: string };
+/** `GET /api/trails/moderation/photos`: trail photos with open reports or hidden, most reports first. */
+export type PhotoModerationItem = {
+  trailId: string;
+  trailName: string;
+  photoId: string;
+  url: string;
+  caption: string | null;
+  uploadedBy: string;
+  hiddenBy: ContentHiddenBy;
+  openReports: number;
+  reports: ContentReport[];
+};
+/** `GET /api/activities/moderation`: hike comments and photos with open reports or hidden. */
+export type ContentModerationItem = {
+  kind: 'Comment' | 'HikePhoto';
+  activityId: string;
+  contentId: string;
+  /** The comment's text; null for photos. */
+  text: string | null;
+  /** The photo's URL; null for comments. */
+  url: string | null;
+  authorId: string;
+  authorName: string;
+  hiddenBy: ContentHiddenBy;
+  openReports: number;
+  reports: ContentReport[];
 };
 
 export type RoutePoint = { latitude: number; longitude: number; elevation: number | null };
@@ -100,7 +145,16 @@ export type ActivityDetails = ActivitySummary & {
 // Hike feed: hikes shared with the author's groups.
 /** What group members see of the track: all of it, without the first/last 200 m, or no map at all. */
 export type TrackPrivacy = 'Full' | 'HideEnds' | 'StatsOnly';
-export type HikePhoto = { id: string; url: string; caption: string | null; addedAtUtc: string };
+export type HikePhoto = {
+  id: string;
+  url: string;
+  caption: string | null;
+  addedAtUtc: string;
+  /** Hidden after reports or by a moderator; only the author and moderators still get it. */
+  hidden: boolean;
+  canReport: boolean;
+  canDelete: boolean;
+};
 export type HikeSharing = { groupIds: string[]; caption: string | null; privacy: TrackPrivacy; sharedAtUtc: string };
 export type ShareTarget = { groupId: string; name: string; memberCount: number };
 export type PostAuthor = { userId: string; displayName: string };
@@ -127,7 +181,16 @@ export type FeedPost = {
   isMine: boolean;
 };
 
-export type FeedComment = { id: string; author: PostAuthor; text: string; createdAtUtc: string; canDelete: boolean };
+export type FeedComment = {
+  id: string;
+  author: PostAuthor;
+  text: string;
+  createdAtUtc: string;
+  canDelete: boolean;
+  canReport: boolean;
+  /** Hidden after reports or by a moderator; only its writer and moderators still get it. */
+  hidden: boolean;
+};
 export type FeedPostDetails = FeedPost & { comments: FeedComment[]; elevationProfile: ElevationSample[] };
 export type LikeState = { likeCount: number; likedByMe: boolean };
 

@@ -7,13 +7,14 @@ using TrailHub.Trails.Application.Responses;
 
 namespace TrailHub.Trails.Api.Controllers;
 
-/// <summary>Favorites, reviews and trail condition reports.</summary>
+/// <summary>Favorites, reviews, trail condition reports, and reporting and moderating trails and their photos.</summary>
 [Route("api/trails")]
 public sealed class TrailCommunityController(
     IFavoriteTrailService favoriteService,
     IReviewService reviewService,
     IConditionReportService conditionService,
-    IModerationService moderationService) : ApiController
+    IModerationService moderationService,
+    IPhotoModerationService photoModerationService) : ApiController
 {
     /// <summary>The caller's favorite trails, most recently saved first.</summary>
     [HttpGet("favorites")]
@@ -65,6 +66,37 @@ public sealed class TrailCommunityController(
     public async Task<IActionResult> Moderate(Guid id, ModerateTrailRequest body, CancellationToken ct)
     {
         await moderationService.ModerateAsync(id, body, ct);
+        return NoContent();
+    }
+
+    /// <summary>Reports a trail photo as inappropriate, spam or harassment. Reporting again updates your report.</summary>
+    /// <remarks>After 3 people report a photo it's hidden until a moderator reviews it.</remarks>
+    [HttpPost("{id:guid}/photos/{photoId:guid}/report")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReportPhoto(Guid id, Guid photoId, ReportContentRequest body, CancellationToken ct)
+    {
+        await photoModerationService.ReportAsync(id, photoId, body, ct);
+        return NoContent();
+    }
+
+    /// <summary>Moderators: trail photos with open reports, and hidden photos, most reported first.</summary>
+    [HttpGet("moderation/photos")]
+    [ProducesResponseType<IReadOnlyList<PhotoModerationItemResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<PhotoModerationItemResponse>>> PhotoModerationQueue(CancellationToken ct) =>
+        Ok(await photoModerationService.GetQueueAsync(ct));
+
+    /// <summary>Moderators: restore, hide or delete a trail photo. Resolves its open reports.</summary>
+    [HttpPut("{id:guid}/photos/{photoId:guid}/moderation")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ModeratePhoto(Guid id, Guid photoId, ModerateContentRequest body, CancellationToken ct)
+    {
+        await photoModerationService.ModerateAsync(id, photoId, body, ct);
         return NoContent();
     }
 

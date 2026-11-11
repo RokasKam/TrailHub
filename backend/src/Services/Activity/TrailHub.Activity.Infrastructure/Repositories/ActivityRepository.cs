@@ -12,6 +12,26 @@ internal sealed class ActivityRepository(ActivityDbContext db) : IActivityReposi
     public Task<HikeActivity?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.Activities.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
 
+    public Task<HikeActivity?> FindByPhotoIdAsync(Guid photoId, CancellationToken cancellationToken)
+    {
+        // Photos are a jsonb array of {"id": …, …}; containment is the indexable way to find the element.
+        var match = $"[{{\"id\":\"{photoId}\"}}]";
+        return db.Activities
+            .FromSql($"SELECT * FROM activity.\"Activities\" WHERE \"Photos\" @> {match}::jsonb")
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<HikeActivity>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var array = ids.ToArray();
+        return await db.Activities.AsNoTracking().Where(a => array.Contains(a.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetIdsWithHiddenPhotosAsync(CancellationToken cancellationToken) =>
+        await db.Database
+            .SqlQuery<Guid>($"SELECT \"Id\" AS \"Value\" FROM activity.\"Activities\" WHERE jsonb_path_exists(\"Photos\", '$[*] ? (@.hiddenBy != null)')")
+            .ToListAsync(cancellationToken);
+
     public void Add(HikeActivity activity) => db.Activities.Add(activity);
 
     public void Remove(HikeActivity activity) => db.Activities.Remove(activity);

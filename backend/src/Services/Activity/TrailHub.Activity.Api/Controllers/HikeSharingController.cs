@@ -50,7 +50,7 @@ public sealed class HikeSharingController(IHikeSharingService sharingService, IH
         return Created($"/api/activities/{id}", photo);
     }
 
-    /// <summary>Removes a photo from a hike and deletes the stored file.</summary>
+    /// <summary>Removes a photo from a hike and deletes the stored file. Allowed for the hike's author and moderators.</summary>
     [HttpDelete("{id:guid}/photos/{photoId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

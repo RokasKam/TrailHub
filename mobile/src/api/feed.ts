@@ -1,7 +1,7 @@
 import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import type { FeedComment, FeedPost, FeedPostDetails, LikeState, Paged } from '@/lib/types';
+import type { ContentModerationItem, ContentReportReason, FeedComment, FeedPost, FeedPostDetails, LikeState, ModerationAction, Paged } from '@/lib/types';
 
 // Social data changes often and isn't needed offline, so none of it is persisted to disk.
 export const feedKeys = {
@@ -10,6 +10,9 @@ export const feedKeys = {
   list: (groupId: string | null) => ['feed', 'list', groupId ?? 'all'] as const,
   post: (id: string) => ['feed', 'post', id] as const,
 };
+
+/** Reported or hidden hike comments and photos. Kept outside `feed` so feed refreshes don't refetch it. */
+export const contentModerationKey = ['activities', 'moderation'] as const;
 
 /** Hikes shared with the caller's groups, newest first; optionally one group only. */
 export function useFeed(groupId: string | null) {
@@ -75,6 +78,52 @@ export function useDeleteComment(id: string) {
         p ? { ...p, comments: p.comments.filter((c) => c.id !== commentId), commentCount: Math.max(0, p.commentCount - 1) } : p,
       );
       void qc.invalidateQueries({ queryKey: feedKeys.all });
+    },
+  });
+}
+
+type ReportBody = { reason: ContentReportReason; details?: string | null };
+
+export function useReportComment(postId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, ...body }: ReportBody & { commentId: string }) =>
+      api<void>(`/api/activities/feed/${postId}/comments/${commentId}/report`, { method: 'POST', body }),
+    // A third report hides the comment.
+    onSuccess: () => qc.invalidateQueries({ queryKey: feedKeys.post(postId) }),
+  });
+}
+
+export function useReportHikePhoto(postId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ photoId, ...body }: ReportBody & { photoId: string }) =>
+      api<void>(`/api/activities/feed/${postId}/photos/${photoId}/report`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: feedKeys.all }),
+  });
+}
+
+/** Moderators only; 403 for everyone else, which is how the app knows. */
+export function useContentModerationQueue() {
+  return useQuery({
+    queryKey: contentModerationKey,
+    queryFn: ({ signal }) => api<ContentModerationItem[]>('/api/activities/moderation', { signal }),
+    retry: false,
+    meta: { persist: false },
+  });
+}
+
+export type ModerateContentInput = { kind: 'comments' | 'photos'; contentId: string; action: ModerationAction };
+
+/** Restore / hide / delete a hike comment or photo (moderators). Also how moderators delete from the feed. */
+export function useModerateContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, contentId, action }: ModerateContentInput) => api<void>(`/api/activities/moderation/${kind}/${contentId}`, { method: 'PUT', body: { action } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: contentModerationKey });
+      void qc.invalidateQueries({ queryKey: feedKeys.all });
+      void qc.invalidateQueries({ queryKey: ['activities'] });
     },
   });
 }

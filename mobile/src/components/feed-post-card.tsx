@@ -123,7 +123,7 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
           <View style={styles.photos}>
             {photos.map((p, i) => (
               <View key={p.id} style={styles.photoCell}>
-                <Image source={{ uri: p.url }} style={styles.photo} contentFit="cover" transition={150} />
+                <Image source={{ uri: p.url }} style={[styles.photo, p.hidden && { opacity: 0.45 }]} contentFit="cover" transition={150} />
                 {i === photos.length - 1 && post.photos.length > photos.length && (
                   <View style={styles.more}>
                     <ThemedText type="smallBold" style={{ color: '#fff' }}>

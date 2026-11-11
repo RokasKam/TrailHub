@@ -1,7 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import type { AppIcon } from '@/lib/icons';
 import { useEffect, useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useUnits } from '@/api/profile';
 import {
@@ -19,6 +19,7 @@ import {
 import { useSession } from '@/auth/session';
 import { ElevationChart } from '@/components/charts';
 import { PhotoGallery } from '@/components/photo-gallery';
+import { type ReasonOption, ReportSheet } from '@/components/report-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { DIFFICULTY_COLORS } from '@/components/trail-card';
 import { downloadOfflineRegion, offlineRegionProgress, TrailMap, useMapStyleUrl } from '@/components/trail-map';
@@ -307,12 +308,12 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });
 
-const REPORT_REASONS: { reason: ReportReason; label: string }[] = [
-  { reason: 'Inaccurate', label: 'Line is wrong or off the paths' },
-  { reason: 'Dangerous', label: 'Dangerous or closed route' },
-  { reason: 'Inappropriate', label: 'Offensive name, text or photos' },
-  { reason: 'Spam', label: 'Spam or advertising' },
-  { reason: 'Other', label: 'Something else' },
+const REPORT_REASONS: ReasonOption<ReportReason>[] = [
+  { value: 'Inaccurate', label: 'Inaccurate', hint: 'The line is wrong or off the paths.' },
+  { value: 'Dangerous', label: 'Dangerous', hint: 'A dangerous or closed route.' },
+  { value: 'Inappropriate', label: 'Inappropriate', hint: 'Offensive name, text or photos.' },
+  { value: 'Spam', label: 'Spam', hint: 'Spam or advertising.' },
+  { value: 'Other', label: 'Other', hint: 'Something else. Tell us below.' },
 ];
 
 /** Out of Discover: shown to the author and moderators, the only people who can still open the trail. */
@@ -340,36 +341,29 @@ function ModerationTools({ trail }: { trail: TrailDetails }) {
   const moderate = useModerateTrail();
   const isAuthor = trail.createdBy === user?.id;
 
-  const send = (reason: ReportReason) =>
-    report.mutate(
-      { reason },
-      {
-        onSuccess: () => Alert.alert('Thanks for the report', 'A moderator will look at it. Trails reported by several people are hidden from Discover until then.'),
-        onError: (e) => Alert.alert("Couldn't send the report", e.message),
-      },
-    );
-  const pickReason = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: 'What’s wrong with this trail?', options: [...REPORT_REASONS.map((r) => r.label), 'Cancel'], cancelButtonIndex: REPORT_REASONS.length },
-        (i) => REPORT_REASONS[i] && send(REPORT_REASONS[i].reason),
-      );
-    } else {
-      Alert.alert('What’s wrong with this trail?', undefined, [...REPORT_REASONS.map((r) => ({ text: r.label, onPress: () => send(r.reason) })), { text: 'Cancel', style: 'cancel' }]);
-    }
-  };
+  const [reporting, setReporting] = useState(false);
 
   return (
-    <List>
-      {!isAuthor && <ListRow icon="flag.fill" iconColor="#B45309" title={report.isSuccess ? 'Reported' : 'Report this trail'} onPress={report.isSuccess ? undefined : pickReason} />}
-      {trail.viewerIsModerator && (
-        <ListRow
-          icon={trail.hiddenBy ? 'eye.fill' : 'eye.slash.fill'}
-          iconColor="#7C3AED"
-          title={trail.hiddenBy ? 'Moderator: restore to Discover' : 'Moderator: hide from Discover'}
-          onPress={() => moderate.mutate({ id: trail.id, hidden: !trail.hiddenBy }, { onError: (e) => Alert.alert("Couldn't update", e.message) })}
-        />
-      )}
-    </List>
+    <>
+      <List>
+        {!isAuthor && <ListRow icon="flag.fill" iconColor="#B45309" title={report.isSuccess ? 'Reported' : 'Report this trail'} onPress={report.isSuccess ? undefined : () => setReporting(true)} />}
+        {trail.viewerIsModerator && (
+          <ListRow
+            icon={trail.hiddenBy ? 'eye.fill' : 'eye.slash.fill'}
+            iconColor="#7C3AED"
+            title={trail.hiddenBy ? 'Moderator: restore to Discover' : 'Moderator: hide from Discover'}
+            onPress={() => moderate.mutate({ id: trail.id, hidden: !trail.hiddenBy }, { onError: (e) => Alert.alert("Couldn't update", e.message) })}
+          />
+        )}
+      </List>
+      <ReportSheet
+        visible={reporting}
+        onClose={() => setReporting(false)}
+        title="Report trail"
+        reasons={REPORT_REASONS}
+        thanksMessage="Trails reported by several people are hidden from Discover until then."
+        onSubmit={(r) => report.mutateAsync(r)}
+      />
+    </>
   );
 }
