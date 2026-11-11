@@ -22,10 +22,12 @@ public sealed class LayeringRuleTests
         "TrailHub.Contracts",
     ];
 
+    private static readonly string[] Layers = ["Domain", "Application", "Infrastructure", "Api"];
+
     public static TheoryData<string> Services => new(ServiceNames);
 
     public static TheoryData<string> AllAssemblies => new(
-        ServiceNames.SelectMany(s => new[] { "Domain", "Application", "Infrastructure", "Api" }.Select(layer => $"TrailHub.{s}.{layer}"))
+        ServiceNames.SelectMany(s => Layers.Select(layer => $"TrailHub.{s}.{layer}"))
             .Concat(SharedAssemblies));
 
     [Theory]
