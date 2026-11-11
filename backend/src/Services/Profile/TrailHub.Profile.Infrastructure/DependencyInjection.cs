@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.BuildingBlocks.Infrastructure.Persistence;
-using TrailHub.Profile.Application.Profiles;
+using TrailHub.Profile.Application.Interfaces.Repository;
 using TrailHub.Profile.Infrastructure.Messaging;
 using TrailHub.Profile.Infrastructure.Persistence;
+using TrailHub.Profile.Infrastructure.Repositories;
 
 namespace TrailHub.Profile.Infrastructure;
 
@@ -36,14 +36,4 @@ public static class DependencyInjection
 
     internal static DbContextOptionsBuilder UseProfileNpgsql(this DbContextOptionsBuilder options, string connectionString) =>
         options.UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "profile"));
-}
-
-internal sealed class ProfileDbContextFactory : IDesignTimeDbContextFactory<ProfileDbContext>
-{
-    public ProfileDbContext CreateDbContext(string[] args)
-    {
-        var options = new DbContextOptionsBuilder<ProfileDbContext>();
-        options.UseProfileNpgsql("Host=localhost;Database=trailhub_profile;Username=trailhub;Password=trailhub");
-        return new ProfileDbContext(options.Options);
-    }
 }

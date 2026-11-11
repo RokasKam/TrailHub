@@ -1,6 +1,6 @@
 using TrailHub.BuildingBlocks.Domain;
 using TrailHub.BuildingBlocks.Domain.Geo;
-using TrailHub.Routes.Application.Routes;
+using TrailHub.Routes.Application.Interfaces.Providers;
 using TrailHub.Routes.Domain.Routes;
 
 namespace TrailHub.Routes.Infrastructure.Providers;

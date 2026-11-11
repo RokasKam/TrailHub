@@ -1,25 +1,17 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
-using TrailHub.Trails.Application.Abstractions;
-using TrailHub.Trails.Application.Community;
-using TrailHub.Trails.Application.Trails;
+using TrailHub.Trails.Application.Interfaces.Providers;
+using TrailHub.Trails.Application.Interfaces.Repository;
+using TrailHub.Trails.Infrastructure.Moderation;
 using TrailHub.Trails.Infrastructure.Persistence;
 using TrailHub.Trails.Infrastructure.Photos;
+using TrailHub.Trails.Infrastructure.Repositories;
 
 namespace TrailHub.Trails.Infrastructure;
-
-/// <summary>Moderators are listed in configuration (<c>Moderation:ModeratorUserIds</c>, Auth0 user ids).</summary>
-internal sealed class ConfiguredModerators(IReadOnlyCollection<string> userIds) : IModerators
-{
-    private readonly HashSet<string> _ids = [.. userIds.Where(id => !string.IsNullOrWhiteSpace(id))];
-
-    public bool IsModerator(string userId) => _ids.Contains(userId);
-}
 
 public static class DependencyInjection
 {
@@ -57,15 +49,4 @@ public static class DependencyInjection
             npgsql.UseNetTopologySuite();
             npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "trails");
         });
-}
-
-/// <summary>Used by <c>dotnet ef</c> only; runtime configuration comes from the API host.</summary>
-internal sealed class TrailsDbContextFactory : IDesignTimeDbContextFactory<TrailsDbContext>
-{
-    public TrailsDbContext CreateDbContext(string[] args)
-    {
-        var options = new DbContextOptionsBuilder<TrailsDbContext>();
-        options.UseTrailsNpgsql("Host=localhost;Database=trailhub_trails;Username=trailhub;Password=trailhub");
-        return new TrailsDbContext(options.Options);
-    }
 }

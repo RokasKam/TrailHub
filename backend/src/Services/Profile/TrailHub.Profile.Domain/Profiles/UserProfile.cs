@@ -2,32 +2,6 @@ using TrailHub.BuildingBlocks.Domain;
 
 namespace TrailHub.Profile.Domain.Profiles;
 
-public enum UnitSystem
-{
-    Metric,
-    Imperial,
-}
-
-public enum MapStyle
-{
-    Outdoors,
-    Satellite,
-    Terrain,
-}
-
-public sealed record ProfilePreferences(
-    UnitSystem Units = UnitSystem.Metric,
-    MapStyle MapStyle = MapStyle.Outdoors,
-    bool ShareLocationWithGroups = true,
-    bool NotificationsEnabled = true);
-
-public sealed record HikingTotals(int CompletedHikes, double DistanceMeters, double ElevationGainMeters, double LongestHikeMeters, double BiggestClimbMeters);
-
-/// <summary>A hike counted towards this profile's totals. Also makes event handling idempotent.</summary>
-public sealed record RecordedHike(Guid ActivityId, double DistanceMeters, double ElevationGainMeters, DateTime CompletedAtUtc);
-
-public sealed record UnlockedAchievement(string Code, DateTime UnlockedAtUtc);
-
 /// <summary>
 /// The app-side profile for an Auth0 user. Identity (credentials, social logins, MFA) lives in
 /// Auth0; this aggregate owns everything TrailHub-specific about the person.
@@ -134,11 +108,4 @@ public sealed class UserProfile : AggregateRoot<Guid>
         var trimmed = name?.Trim();
         return string.IsNullOrEmpty(trimmed) ? "Hiker" : trimmed[..Math.Min(trimmed.Length, MaxDisplayNameLength)];
     }
-}
-
-public static class ProfileErrors
-{
-    public static readonly Error InvalidDisplayName = Error.Validation("Profile.InvalidDisplayName", $"Display name is required and must be at most {UserProfile.MaxDisplayNameLength} characters.");
-    public static readonly Error BioTooLong = Error.Validation("Profile.BioTooLong", $"Bio must be at most {UserProfile.MaxBioLength} characters.");
-    public static readonly Error InvalidAvatarUrl = Error.Validation("Profile.InvalidAvatarUrl", "Avatar URL must be an absolute https URL.");
 }

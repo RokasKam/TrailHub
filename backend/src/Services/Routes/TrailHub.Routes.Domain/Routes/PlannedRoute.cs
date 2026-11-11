@@ -3,14 +3,6 @@ using TrailHub.BuildingBlocks.Domain.Geo;
 
 namespace TrailHub.Routes.Domain.Routes;
 
-/// <summary>A point the user placed. Overnight waypoints end a day, which is how a route becomes multi-day.</summary>
-/// <param name="Kind">What the stop is, when it came from the map (e.g. the hut the planner chose).</param>
-public sealed record RouteWaypoint(double Latitude, double Longitude, string? Name, bool IsOvernight, PoiKind? Kind = null);
-
-/// <summary>The router's answer for a list of waypoints: a line along paths, and where each waypoint landed on it.</summary>
-/// <param name="Snapped">False when the line is straight segments between waypoints (no hiking paths found, or no router configured).</param>
-public sealed record RoutedTrack(Track Track, IReadOnlyList<int> WaypointIndices, bool Snapped);
-
 /// <summary>
 /// A route the user designed by placing waypoints, saved with the line the router produced so it can be shown,
 /// measured and exported without routing it again.
@@ -210,25 +202,4 @@ public sealed class PlannedRoute : AggregateRoot<Guid>
         string.IsNullOrWhiteSpace(name) || name.Trim().Length > MaxNameLength ? RouteErrors.InvalidName
         : description?.Length > MaxTextLength ? RouteErrors.TextTooLong
         : null;
-}
-
-public static class RouteErrors
-{
-    public static readonly Error NotFound = Error.NotFound("Route.NotFound", "The route does not exist.");
-    public static readonly Error InvalidName = Error.Validation("Route.InvalidName", $"Name is required and must be at most {PlannedRoute.MaxNameLength} characters.");
-    public static readonly Error TextTooLong = Error.Validation("Route.TextTooLong", "Text is too long.");
-    public static readonly Error WaypointCount = Error.Validation("Route.WaypointCount", $"A route needs {PlannedRoute.MinWaypoints} to {PlannedRoute.MaxWaypoints} waypoints.");
-    public static readonly Error InvalidWaypoint = Error.Validation("Route.InvalidWaypoint", "A waypoint has an invalid latitude or longitude.");
-    public static readonly Error RoutingMismatch = Error.Validation("Route.RoutingMismatch", "The routed line doesn't match the waypoints.");
-    public static readonly Error NoPath = Error.Validation("Route.NoPath", "No hiking path connects these points. Move a waypoint closer to a trail.");
-    public static readonly Error TooLong = Error.Validation("Route.TooLong", "This route is too long to plan in one go. Add waypoints or plan it in parts.");
-    public static readonly Error RouterUnavailable = Error.Unavailable("Route.RouterUnavailable", "The route planner is unavailable right now. Try again in a minute.");
-    public static readonly Error MapDataUnavailable = Error.Unavailable("Route.MapDataUnavailable", "Map data (huts, water, campsites) is unavailable right now. Try again in a few minutes.");
-    public static readonly Error InvalidPlan = Error.Validation("Route.InvalidPlan", $"Plan 1 to {ItineraryOptions.MaxDays} days with a sensible daily distance.");
-    public static readonly Error NotOwner = Error.Forbidden("Route.NotOwner", "Only the route's author can do that.");
-    public static readonly Error GroupNotFound = Error.NotFound("Route.GroupNotFound", "That group doesn't exist or you're not in it.");
-    public static readonly Error PublishNeedsPaths = Error.Validation("Route.PublishNeedsPaths", "Only routes that follow paths can be published. This one is drawn as straight lines.");
-    public static readonly Error PublishTooShort = Error.Validation("Route.PublishTooShort", "A route must be at least 1 km long to publish.");
-    public static readonly Error InvalidPublishDetails = Error.Validation("Route.InvalidPublishDetails", "Give the trail a name and a region.");
-    public static readonly Error PlaceNotFound = Error.NotFound("Route.PlaceNotFound", "No place matches that search.");
 }

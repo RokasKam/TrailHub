@@ -38,16 +38,27 @@ backend/   .NET 10 microservices · clean architecture · PostgreSQL/PostGIS · 
 | Groups   | Groups, invite codes, scheduled group hikes with RSVPs and meeting points, **real-time location** (SignalR/WebSockets to watch, REST to share so it works in the background) | PostgreSQL + Redis (ephemeral positions, SignalR backplane) |
 | Weather  | Current conditions, 16-day forecasts downscaled to trail elevation, per-day hiking suitability | Redis cache (Open-Meteo upstream) |
 
-**Clean architecture, per service:** `Domain` (entities, value objects, rules; no framework
-references) ← `Application` (commands/queries/handlers, repository interfaces) ← `Infrastructure`
-(EF Core, PostGIS, MassTransit, Redis, HTTP clients) ← `Api` (thin `[ApiController]` controllers that
-call one handler each and map its `Result` to an HTTP response or RFC 9457 problem details).
+**Repository → service → controller, per service:**
+
+```
+Domain/                  entities, value objects, rules (no framework references)
+Application/
+  Interfaces/Repository/ IXRepository          ← implemented in Infrastructure/Repositories
+  Interfaces/Service/    IXService             ← implemented in Application/Services
+  Services/              XService              business logic; throws NotFound/BadRequest/Forbidden/Conflict exceptions
+  Requests/ Responses/   request and response models (Dtos/ for shapes used both ways), Mappings/
+Infrastructure/          Repositories/, Persistence/ (DbContext, Configurations/), providers, consumers
+Api/Controllers/         thin controllers: take IXService in the constructor and return its result
+```
+
+Domain methods return a `Result`; services turn a failure into the matching exception
+(`error.ToException()`, `result.GetValueOrThrow()`), and `TrailHubExceptionHandler` maps exceptions to
+RFC 9457 problem details (status by exception type, `code` and `detail` from the error).
+Every type lives in its own file and no type is nested in another.
 Shared kernels live in `backend/src/BuildingBlocks`; services share only `TrailHub.Contracts`
 (integration events). `tests/TrailHub.ArchitectureTests` fails the build if a layer or service
-references something it shouldn't, or if an aggregate exposes a public setter.
-
-No mediator library: controller actions inject (`[FromServices]`) the exact `ICommandHandler<…>`/`IQueryHandler<…>`
-they call, so each action's dependencies are visible in its signature.
+references something it shouldn't, a controller takes anything but a service interface, a type is
+nested, or an aggregate exposes a public setter.
 MassTransit is pinned to v8 (Apache-2.0); v9+ requires a commercial license.
 
 ## Run it locally

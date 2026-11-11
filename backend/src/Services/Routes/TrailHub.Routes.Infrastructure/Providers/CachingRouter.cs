@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using TrailHub.BuildingBlocks.Domain;
 using TrailHub.BuildingBlocks.Domain.Geo;
-using TrailHub.Routes.Application.Routes;
+using TrailHub.Routes.Application.Interfaces.Providers;
 using TrailHub.Routes.Domain.Routes;
 
 namespace TrailHub.Routes.Infrastructure.Providers;
@@ -61,24 +61,13 @@ internal sealed class CachingRouter(IRouter inner, IDistributedCache cache, stri
     private async Task<List<RoutedTrack>?> GetAsync(string key, CancellationToken cancellationToken)
     {
         var json = await cache.GetStringAsync(key, cancellationToken);
-        return json is null ? null : JsonSerializer.Deserialize<List<StoredTrack>>(json, Json)?.Select(s => s.ToRoutedTrack()).ToList();
+        return json is null ? null : JsonSerializer.Deserialize<List<CachedRoutedTrack>>(json, Json)?.Select(s => s.ToRoutedTrack()).ToList();
     }
 
     private Task SetAsync(string key, IEnumerable<RoutedTrack> tracks, CancellationToken cancellationToken) =>
         cache.SetStringAsync(
             key,
-            JsonSerializer.Serialize(tracks.Select(StoredTrack.From).ToList(), Json),
+            JsonSerializer.Serialize(tracks.Select(CachedRoutedTrack.From).ToList(), Json),
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheFor },
             cancellationToken);
-
-    private sealed record StoredTrack(double?[][] Points, byte[] Sac, int[] Waypoints, bool Snapped)
-    {
-        public static StoredTrack From(RoutedTrack r) => new(
-            r.Track.Points.Select(p => new[] { p.Latitude, p.Longitude, p.Elevation }).ToArray(),
-            [.. r.Track.SacScale],
-            [.. r.WaypointIndices],
-            r.Snapped);
-
-        public RoutedTrack ToRoutedTrack() => new(new Track(Points.Select(p => new GeoPoint(p[0]!.Value, p[1]!.Value, p[2])).ToList(), Sac), Waypoints, Snapped);
-    }
 }

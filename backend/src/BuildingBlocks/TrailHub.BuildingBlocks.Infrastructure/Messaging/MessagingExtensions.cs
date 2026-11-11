@@ -48,11 +48,4 @@ public static class MessagingExtensions
         services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
         return services;
     }
-
-    private sealed class MassTransitEventPublisher(IPublishEndpoint publishEndpoint) : IEventPublisher
-    {
-        public Task PublishAsync<TEvent>(TEvent integrationEvent, CancellationToken cancellationToken)
-            where TEvent : class =>
-            publishEndpoint.Publish(integrationEvent, cancellationToken);
-    }
 }

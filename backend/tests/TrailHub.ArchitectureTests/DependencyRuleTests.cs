@@ -6,7 +6,7 @@ namespace TrailHub.ArchitectureTests;
 /// <summary>
 /// Enforces the clean-architecture dependency rule: Domain ← Application ← Infrastructure ← Api.
 /// The compiler only keeps references that are actually used, so these checks catch real leaks
-/// (e.g. an EF type in a handler), not just a stray ProjectReference.
+/// (e.g. an EF type in a service), not just a stray ProjectReference.
 /// </summary>
 public sealed class DependencyRuleTests
 {

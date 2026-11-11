@@ -2,7 +2,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Configuration;
-using TrailHub.Trails.Application.Trails;
+using TrailHub.Trails.Application.Interfaces.Providers;
 
 namespace TrailHub.Trails.Infrastructure.Photos;
 

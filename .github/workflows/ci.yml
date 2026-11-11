@@ -107,6 +107,10 @@ jobs:
         if: env.MAPBOX_ACCESS_TOKEN != ''
         working-directory: backend
         run: MODERATOR=moderation-mod node scripts/moderation-test.mjs
+      - name: API sweep (every endpoint)
+        if: env.MAPBOX_ACCESS_TOKEN != ''
+        working-directory: backend
+        run: node scripts/api-sweep.mjs
       - name: Service logs on failure
         if: failure()
         working-directory: backend

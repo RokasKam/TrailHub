@@ -3,15 +3,6 @@ using TrailHub.BuildingBlocks.Domain.Geo;
 
 namespace TrailHub.Trails.Domain.Trails;
 
-public enum PointOfInterestType
-{
-    WaterSource,
-    Shelter,
-    Campsite,
-    Viewpoint,
-    Other,
-}
-
 public sealed class PointOfInterest : Entity<Guid>
 {
     public const int MaxNameLength = 200;
@@ -65,6 +56,3 @@ public sealed class PointOfInterest : Entity<Guid>
         };
     }
 }
-
-/// <param name="Url">Either an external https URL or a key in TrailHub's photo storage (resolved to a URL when read).</param>
-public sealed record TrailPhoto(string Url, string? Caption, string UploadedBy, DateTime UploadedAtUtc);

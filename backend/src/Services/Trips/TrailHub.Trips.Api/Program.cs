@@ -1,7 +1,7 @@
 using TrailHub.BuildingBlocks.Web;
 using TrailHub.Trips.Api;
 using TrailHub.Trips.Application;
-using TrailHub.Trips.Application.Trips;
+using TrailHub.Trips.Application.Interfaces.Providers;
 using TrailHub.Trips.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);

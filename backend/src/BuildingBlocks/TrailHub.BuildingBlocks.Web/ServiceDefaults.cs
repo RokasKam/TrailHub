@@ -1,12 +1,10 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Web.Authentication;
 
@@ -28,7 +26,7 @@ public static class ServiceDefaults
         builder.Services.AddSingleton(TimeProvider.System);
 
         builder.Services.AddProblemDetails();
-        builder.Services.AddExceptionHandler<UnhandledExceptionHandler>();
+        builder.Services.AddExceptionHandler<TrailHubExceptionHandler>();
         builder.Services
             .AddControllers()
             .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -51,38 +49,5 @@ public static class ServiceDefaults
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
         app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains(ReadyTag) }).AllowAnonymous();
         return app;
-    }
-
-    private sealed class UnhandledExceptionHandler(ILogger<UnhandledExceptionHandler> logger, IProblemDetailsService problemDetails)
-        : IExceptionHandler
-    {
-        public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
-        {
-            // Value objects throw ArgumentException when handed impossible values; that's a bad request, not a crash.
-            var isBadInput = exception is ArgumentException or BadHttpRequestException;
-
-            // Two people changed the same row at once (optimistic concurrency); the client should reload and retry.
-            // Matched by name so this layer doesn't depend on EF Core.
-            var isConflict = exception.GetType().Name == "DbUpdateConcurrencyException";
-            if (!isBadInput && !isConflict)
-            {
-                logger.LogError(exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
-            }
-
-            context.Response.StatusCode = isBadInput ? StatusCodes.Status400BadRequest
-                : isConflict ? StatusCodes.Status409Conflict
-                : StatusCodes.Status500InternalServerError;
-            return await problemDetails.TryWriteAsync(new ProblemDetailsContext
-            {
-                HttpContext = context,
-                Exception = exception,
-                ProblemDetails =
-                {
-                    Status = context.Response.StatusCode,
-                    Title = isBadInput ? "Invalid request" : isConflict ? "Someone else changed this at the same time" : "An unexpected error occurred",
-                    Detail = isBadInput ? exception.Message : isConflict ? "Reload and try again." : null,
-                },
-            });
-        }
     }
 }

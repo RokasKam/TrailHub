@@ -13,7 +13,3 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
 
     public override int GetHashCode() => EqualityComparer<TId>.Default.GetHashCode(Id);
 }
-
-/// <summary>Marks an entity as the consistency boundary that repositories load and save.</summary>
-public abstract class AggregateRoot<TId> : Entity<TId>
-    where TId : notnull;

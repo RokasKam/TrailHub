@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using TrailHub.Activity.Application.Activities;
+using TrailHub.Activity.Application.Interfaces.Repository;
 using TrailHub.Activity.Infrastructure.Persistence;
+using TrailHub.Activity.Infrastructure.Repositories;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Infrastructure;
 using TrailHub.BuildingBlocks.Infrastructure.Messaging;
@@ -37,14 +37,4 @@ public static class DependencyInjection
             npgsql.UseNetTopologySuite();
             npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "activity");
         });
-}
-
-internal sealed class ActivityDbContextFactory : IDesignTimeDbContextFactory<ActivityDbContext>
-{
-    public ActivityDbContext CreateDbContext(string[] args)
-    {
-        var options = new DbContextOptionsBuilder<ActivityDbContext>();
-        options.UseActivityNpgsql("Host=localhost;Database=trailhub_activity;Username=trailhub;Password=trailhub");
-        return new ActivityDbContext(options.Options);
-    }
 }

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using TrailHub.BuildingBlocks.Application;
-using TrailHub.Profile.Application.Profiles;
+using TrailHub.Profile.Application.Interfaces.Service;
+using TrailHub.Profile.Application.Services;
 
 namespace TrailHub.Profile.Application;
 
@@ -8,6 +8,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddProfileApplication(this IServiceCollection services) =>
         services
-            .AddScoped<ProfileProvisioner>()
-            .AddHandlersFromAssembly(typeof(DependencyInjection).Assembly);
+            .AddScoped<IProfileProvisioner, ProfileProvisioner>()
+            .AddScoped<IProfileService, ProfileService>()
+            .AddScoped<IProfileHikeService, ProfileHikeService>();
 }

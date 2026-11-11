@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
-using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Web;
-using TrailHub.Weather.Application.Forecasts;
+using TrailHub.Weather.Application.Interfaces.Service;
+using TrailHub.Weather.Application.Requests;
+using TrailHub.Weather.Application.Responses;
 
 namespace TrailHub.Weather.Api.Controllers;
 
 /// <summary>Mountain weather from Open-Meteo, with a per-day hiking suitability assessment.</summary>
 [Route("api/weather")]
-public sealed class WeatherController : ApiController
+public sealed class WeatherController(IWeatherService weatherService) : ApiController
 {
     /// <summary>Current conditions and up to 16 days of forecast for a location.</summary>
     /// <param name="lat">Latitude.</param>
@@ -17,15 +18,14 @@ public sealed class WeatherController : ApiController
     /// <param name="to">Last day to include.</param>
     /// <remarks>Responses are cached for 20 minutes per ~1 km grid cell.</remarks>
     [HttpGet]
-    [ProducesResponseType<ForecastDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ForecastResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<ForecastDto>> Get(
+    public async Task<ActionResult<ForecastResponse>> Get(
         [FromQuery] double lat,
         [FromQuery] double lon,
         [FromQuery] double? elevation,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
-        [FromServices] IQueryHandler<GetForecastQuery, ForecastDto> handler,
         CancellationToken ct) =>
-        FromResult(await handler.Handle(new GetForecastQuery(lat, lon, elevation, from, to), ct));
+        Ok(await weatherService.GetForecastAsync(new ForecastRequest(lat, lon, elevation, from, to), ct));
 }

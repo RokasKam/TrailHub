@@ -1,29 +1,5 @@
 namespace TrailHub.BuildingBlocks.Domain;
 
-public enum ErrorType
-{
-    Validation,
-    NotFound,
-    Conflict,
-    Forbidden,
-
-    /// <summary>A dependency (e.g. a third-party API) is down; worth retrying later.</summary>
-    Unavailable,
-}
-
-public sealed record Error(string Code, string Message, ErrorType Type)
-{
-    public static Error Validation(string code, string message) => new(code, message, ErrorType.Validation);
-
-    public static Error NotFound(string code, string message) => new(code, message, ErrorType.NotFound);
-
-    public static Error Conflict(string code, string message) => new(code, message, ErrorType.Conflict);
-
-    public static Error Forbidden(string code, string message) => new(code, message, ErrorType.Forbidden);
-
-    public static Error Unavailable(string code, string message) => new(code, message, ErrorType.Unavailable);
-}
-
 /// <summary>Outcome of an operation that can fail for an expected (business) reason.</summary>
 public class Result
 {
@@ -40,29 +16,4 @@ public class Result
     public static Result Failure(Error error) => new(error);
 
     public static implicit operator Result(Error error) => Failure(error);
-}
-
-public sealed class Result<T> : Result
-{
-    private readonly T? _value;
-
-    private Result(T value)
-        : base(null) => _value = value;
-
-    private Result(Error error)
-        : base(error)
-    {
-    }
-
-    public T Value => IsSuccess
-        ? _value!
-        : throw new InvalidOperationException($"Cannot read the value of a failed result ({Error!.Code}).");
-
-    public static Result<T> Success(T value) => new(value);
-
-    public static new Result<T> Failure(Error error) => new(error);
-
-    public static implicit operator Result<T>(T value) => new(value);
-
-    public static implicit operator Result<T>(Error error) => new(error);
 }

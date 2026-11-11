@@ -2,81 +2,6 @@ using TrailHub.BuildingBlocks.Domain;
 
 namespace TrailHub.Trips.Domain.Trips;
 
-public enum TripStatus
-{
-    Planned,
-    Completed,
-    Cancelled,
-}
-
-public sealed class TripDay
-{
-    public const int MaxTrailsPerDay = 10;
-
-    private TripDay()
-    {
-    }
-
-    internal TripDay(int dayNumber) => DayNumber = dayNumber;
-
-    public int DayNumber { get; private set; }
-
-    public string? Notes { get; private set; }
-
-    /// <summary>Where the group sleeps after this day (hut, campsite, town).</summary>
-    public string? Overnight { get; private set; }
-
-    /// <summary>Trails from the Trails service, in hiking order. Stored by id only; services don't share databases.</summary>
-    public List<Guid> TrailIds { get; private set; } = [];
-
-    internal void Update(string? notes, string? overnight)
-    {
-        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
-        Overnight = string.IsNullOrWhiteSpace(overnight) ? null : overnight.Trim();
-    }
-}
-
-public enum ChecklistItemKind
-{
-    /// <summary>Everyone brings their own (headlamp, water). Each person ticks it off for themselves.</summary>
-    Personal,
-
-    /// <summary>One person brings it for the group (stove, tent). Someone claims it, then ticks it when packed.</summary>
-    Shared,
-}
-
-public sealed class ChecklistItem : Entity<Guid>
-{
-    private ChecklistItem()
-    {
-    }
-
-    internal ChecklistItem(string text, ChecklistItemKind kind, string addedBy)
-    {
-        Id = Guid.CreateVersion7();
-        Text = text;
-        Kind = kind;
-        AddedBy = addedBy;
-    }
-
-    public string Text { get; private set; } = null!;
-
-    public ChecklistItemKind Kind { get; private set; }
-
-    public string AddedBy { get; private set; } = null!;
-
-    /// <summary>Shared items: who is bringing it.</summary>
-    public string? ClaimedBy { get; internal set; }
-
-    /// <summary>Shared items: the claimer has packed it.</summary>
-    public bool IsDone { get; internal set; }
-
-    /// <summary>Personal items: who has packed their own.</summary>
-    public List<string> DoneBy { get; private set; } = [];
-
-    public bool IsDoneFor(string userId) => Kind == ChecklistItemKind.Personal ? DoneBy.Contains(userId) : IsDone;
-}
-
 /// <summary>
 /// A planned (possibly multi-day) hiking trip with a per-day itinerary and a packing checklist.
 /// Linked to a group, its members can see it and use the checklist; the itinerary stays the owner's.
@@ -488,27 +413,4 @@ public sealed class Trip : AggregateRoot<Guid>
         end < start ? TripErrors.EndBeforeStart
         : end.DayNumber - start.DayNumber + 1 > MaxDays ? TripErrors.TooLong
         : null;
-}
-
-public static class TripErrors
-{
-    public static readonly Error NotFound = Error.NotFound("Trip.NotFound", "The trip does not exist.");
-    public static readonly Error InvalidName = Error.Validation("Trip.InvalidName", $"Name is required and must be at most {Trip.MaxNameLength} characters.");
-    public static readonly Error TextTooLong = Error.Validation("Trip.TextTooLong", "Text is too long.");
-    public static readonly Error EndBeforeStart = Error.Validation("Trip.EndBeforeStart", "The trip cannot end before it starts.");
-    public static readonly Error TooLong = Error.Validation("Trip.TooLong", $"A trip can be at most {Trip.MaxDays} days.");
-    public static readonly Error NotEditable = Error.Conflict("Trip.NotEditable", "Completed or cancelled trips can't be changed.");
-    public static readonly Error DayNotFound = Error.NotFound("Trip.DayNotFound", "The trip has no such day.");
-    public static readonly Error TrailAlreadyOnDay = Error.Conflict("Trip.TrailAlreadyOnDay", "That trail is already planned for this day.");
-    public static readonly Error TrailNotOnDay = Error.NotFound("Trip.TrailNotOnDay", "That trail isn't planned for this day.");
-    public static readonly Error TooManyTrails = Error.Validation("Trip.TooManyTrails", $"A day can have at most {TripDay.MaxTrailsPerDay} trails.");
-    public static readonly Error InvalidChecklistItem = Error.Validation("Trip.InvalidChecklistItem", "Checklist item text is required.");
-    public static readonly Error ChecklistFull = Error.Validation("Trip.ChecklistFull", $"A checklist can have at most {Trip.MaxChecklistItems} items.");
-    public static readonly Error ChecklistItemNotFound = Error.NotFound("Trip.ChecklistItemNotFound", "The checklist item does not exist.");
-    public static readonly Error SharedItemNeedsGroup = Error.Validation("Trip.SharedItemNeedsGroup", "Share the trip with a group before adding group gear.");
-    public static readonly Error NotASharedItem = Error.Validation("Trip.NotASharedItem", "Only group gear can be claimed.");
-    public static readonly Error ClaimedBySomeoneElse = Error.Conflict("Trip.ClaimedBySomeoneElse", "Someone else is already bringing this.");
-    public static readonly Error NotYourItem = Error.Forbidden("Trip.NotYourItem", "Only the trip owner or the person who added it can remove this item.");
-    public static readonly Error NotOwner = Error.Forbidden("Trip.NotOwner", "Only the trip owner can change the plan.");
-    public static readonly Error GroupNotFound = Error.NotFound("Trip.GroupNotFound", "That group doesn't exist or you're not in it.");
 }

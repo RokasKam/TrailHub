@@ -1,13 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
-using TrailHub.Activity.Application.Activities;
-using TrailHub.BuildingBlocks.Application;
+using TrailHub.Activity.Application.Interfaces.Service;
+using TrailHub.Activity.Application.Services;
 
 namespace TrailHub.Activity.Application;
 
 public static class DependencyInjection
 {
     public static IServiceCollection AddActivityApplication(this IServiceCollection services) =>
-        services
-            .AddScoped<ActivitySaver>()
-            .AddHandlersFromAssembly(typeof(DependencyInjection).Assembly);
+        services.AddScoped<IActivityService, ActivityService>();
 }

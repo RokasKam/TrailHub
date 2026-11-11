@@ -28,7 +28,7 @@ public static class SwaggerExtensions
                 options.IncludeXmlComments(xml);
             }
 
-            // Nested DTOs share short names across namespaces (e.g. two "Request" types); full names avoid clashes.
+            // Request and response types in different services can share a short name; full names avoid clashes.
             options.CustomSchemaIds(type => type.FullName!.Replace('+', '.'));
 
             options.AddSecurityDefinition(BearerScheme, new OpenApiSecurityScheme

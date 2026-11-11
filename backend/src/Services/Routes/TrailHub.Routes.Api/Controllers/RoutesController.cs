@@ -1,9 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
-using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Web;
-using TrailHub.Routes.Application.Routes;
-using TrailHub.Routes.Domain.Routes;
+using TrailHub.Routes.Application.Interfaces.Service;
+using TrailHub.Routes.Application.Models;
+using TrailHub.Routes.Application.Requests;
+using TrailHub.Routes.Application.Responses;
 
 namespace TrailHub.Routes.Api.Controllers;
 
@@ -18,22 +19,26 @@ namespace TrailHub.Routes.Api.Controllers;
 /// copy it, but only the author can change, share or publish it. A route you can't see returns 404.
 /// </remarks>
 [Route("api/routes")]
-public sealed class RoutesController : ApiController
+public sealed class RoutesController(
+    IRouteService routeService,
+    IRoutePlanningService planningService,
+    IRouteSharingService sharingService,
+    IPlaceService placeService) : ApiController
 {
     /// <summary>Routes waypoints without saving: what the editor shows while you place points.</summary>
     /// <remarks>Mark a waypoint <c>isOvernight</c> to end a day there; <c>days</c> then has one entry per day.</remarks>
     [HttpPost("preview")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<ActionResult<RouteDto>> Preview(WaypointsRequest body, [FromServices] IQueryHandler<PreviewRouteQuery, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new PreviewRouteQuery(body.Waypoints), ct));
+    public async Task<ActionResult<RouteResponse>> Preview(WaypointsRequest body, CancellationToken ct) =>
+        Ok(await planningService.PreviewAsync(body.Waypoints, ct));
 
     /// <summary>Up to three different routes between two points, best first.</summary>
     [HttpPost("alternatives")]
-    [ProducesResponseType<IReadOnlyList<RouteDto>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<RouteDto>>> Alternatives(AlternativesRequest body, [FromServices] IQueryHandler<FindAlternativesQuery, IReadOnlyList<RouteDto>> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new FindAlternativesQuery(body.From, body.To), ct));
+    [ProducesResponseType<IReadOnlyList<RouteResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<RouteResponse>>> Alternatives(AlternativesRequest body, CancellationToken ct) =>
+        Ok(await planningService.FindAlternativesAsync(body.From, body.To, ct));
 
     /// <summary>
     /// Plans a multi-day hike: routes start → finish, then picks a place to sleep each night (campsite, hut or hotel,
@@ -41,86 +46,92 @@ public sealed class RoutesController : ApiController
     /// </summary>
     /// <remarks>Returns an unsaved route whose overnight waypoints are the stops. Save it with <c>POST /api/routes</c>.</remarks>
     [HttpPost("plan")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<RouteDto>> Plan(PlanItineraryQuery body, [FromServices] IQueryHandler<PlanItineraryQuery, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(body, ct));
+    public async Task<ActionResult<RouteResponse>> Plan(PlanItineraryRequest body, CancellationToken ct) =>
+        Ok(await planningService.PlanItineraryAsync(body, ct));
 
     /// <summary>Water, campsites, huts, shelters, hotels and viewpoints within <c>corridorMeters</c> (default 500, max 2000) of a line.</summary>
     /// <remarks>Send the route's path as <c>[latitude, longitude]</c> pairs; it's thinned out server-side.</remarks>
     [HttpPost("pois")]
     [ProducesResponseType<IReadOnlyList<Poi>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<Poi>>> Pois(PoisAlongQuery body, [FromServices] IQueryHandler<PoisAlongQuery, IReadOnlyList<Poi>> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(body, ct));
+    public async Task<ActionResult<IReadOnlyList<Poi>>> Pois(PoisAlongRequest body, CancellationToken ct) =>
+        Ok(await placeService.GetPoisAlongAsync(body, ct));
 
     /// <summary>Searches places by name (towns, peaks, huts), ranked by distance from <c>lat</c>/<c>lon</c> when given.</summary>
     [HttpGet("places")]
     [ProducesResponseType<IReadOnlyList<Place>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<Place>>> Places([FromQuery] string q, [FromQuery] double? lat, [FromQuery] double? lon, [FromServices] IQueryHandler<SearchPlacesQuery, IReadOnlyList<Place>> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new SearchPlacesQuery(q, lat, lon), ct));
+    public async Task<ActionResult<IReadOnlyList<Place>>> Places([FromQuery] string q, [FromQuery] double? lat, [FromQuery] double? lon, CancellationToken ct) =>
+        Ok(await placeService.SearchPlacesAsync(q, lat, lon, ct));
 
     /// <summary>Suggests a name for a route from its start and finish (huts, villages or towns).</summary>
     [HttpPost("suggest-name")]
     [ProducesResponseType<RouteNameResponse>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<RouteNameResponse>> SuggestName(WaypointsRequest body, [FromServices] IQueryHandler<SuggestRouteNameQuery, string> handler, CancellationToken ct)
-    {
-        var result = await handler.Handle(new SuggestRouteNameQuery(body.Waypoints), ct);
-        return result.IsSuccess ? new RouteNameResponse(result.Value) : ProblemFor(result.Error!);
-    }
+    public async Task<ActionResult<RouteNameResponse>> SuggestName(WaypointsRequest body, CancellationToken ct) =>
+        Ok(await placeService.SuggestNameAsync(body.Waypoints, ct));
 
     /// <summary>The caller's saved routes and routes shared with their groups (<c>isOwner: false</c>), most recently changed first.</summary>
     [HttpGet]
-    [ProducesResponseType<IReadOnlyList<RouteSummary>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<RouteSummary>>> List([FromServices] IQueryHandler<GetMyRoutesQuery, IReadOnlyList<RouteSummary>> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new GetMyRoutesQuery(), ct));
+    [ProducesResponseType<IReadOnlyList<RouteSummaryResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<RouteSummaryResponse>>> List(CancellationToken ct) =>
+        Ok(await routeService.GetRoutesAsync(ct));
 
     /// <summary>A saved route with its line, stats, elevation profile and days.</summary>
     [HttpGet("{id:guid}")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RouteDto>> Get(Guid id, [FromServices] IQueryHandler<GetRouteQuery, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new GetRouteQuery(id), ct));
+    public async Task<ActionResult<RouteResponse>> Get(Guid id, CancellationToken ct) =>
+        Ok(await routeService.GetRouteAsync(id, ct));
 
     /// <summary>Saves a new route. The waypoints are routed again, so what's saved matches what was previewed.</summary>
     [HttpPost]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<RouteDto>> Create(SaveRouteRequest body, [FromServices] ICommandHandler<SaveRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new SaveRouteCommand(null, body.Name, body.Description, body.Waypoints), ct), route => CreatedAtAction(nameof(Get), new { id = route.Id }, route));
+    public async Task<ActionResult<RouteResponse>> Create(SaveRouteRequest body, CancellationToken ct)
+    {
+        var route = await routeService.CreateAsync(body, ct);
+        return CreatedAtAction(nameof(Get), new { id = route.Id }, route);
+    }
 
     /// <summary>Replaces a route's name, description and waypoints.</summary>
     [HttpPut("{id:guid}")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RouteDto>> Update(Guid id, SaveRouteRequest body, [FromServices] ICommandHandler<SaveRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new SaveRouteCommand(id, body.Name, body.Description, body.Waypoints), ct));
+    public async Task<ActionResult<RouteResponse>> Update(Guid id, SaveRouteRequest body, CancellationToken ct) =>
+        Ok(await routeService.UpdateAsync(id, body, ct));
 
     /// <summary>Deletes a route.</summary>
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id, [FromServices] ICommandHandler<DeleteRouteCommand> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new DeleteRouteCommand(id), ct));
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await routeService.DeleteAsync(id, ct);
+        return NoContent();
+    }
 
     /// <summary>Shares the route with one of your groups. Members can see, follow, export and copy it.</summary>
     [HttpPut("{id:guid}/groups/{groupId:guid}")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RouteDto>> Share(Guid id, Guid groupId, [FromServices] ICommandHandler<ShareRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new ShareRouteCommand(id, groupId, true), ct));
+    public async Task<ActionResult<RouteResponse>> Share(Guid id, Guid groupId, CancellationToken ct) =>
+        Ok(await sharingService.ShareAsync(id, groupId, share: true, ct));
 
     /// <summary>Stops sharing the route with a group.</summary>
     [HttpDelete("{id:guid}/groups/{groupId:guid}")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<RouteDto>> Unshare(Guid id, Guid groupId, [FromServices] ICommandHandler<ShareRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new ShareRouteCommand(id, groupId, false), ct));
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<RouteResponse>> Unshare(Guid id, Guid groupId, CancellationToken ct) =>
+        Ok(await sharingService.ShareAsync(id, groupId, share: false, ct));
 
     /// <summary>Copies a route you can see (e.g. one shared with your group) into your own routes.</summary>
     [HttpPost("{id:guid}/copy")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status201Created)]
-    public async Task<ActionResult<RouteDto>> Copy(Guid id, [FromServices] ICommandHandler<CopyRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new CopyRouteCommand(id), ct), route => CreatedAtAction(nameof(Get), new { id = route.Id }, route));
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status201Created)]
+    public async Task<ActionResult<RouteResponse>> Copy(Guid id, CancellationToken ct)
+    {
+        var route = await sharingService.CopyAsync(id, ct);
+        return CreatedAtAction(nameof(Get), new { id = route.Id }, route);
+    }
 
     /// <summary>
     /// Publishes the route to Discover as a public trail with the same id (or updates it when published again).
@@ -128,18 +139,18 @@ public sealed class RoutesController : ApiController
     /// </summary>
     /// <remarks>The trail appears in Discover a moment later: the Trails service creates it from an event.</remarks>
     [HttpPost("{id:guid}/publish")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<RouteDto>> Publish(Guid id, PublishRouteRequest body, [FromServices] ICommandHandler<PublishRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new PublishRouteCommand(id, body.Name, body.Description, body.Region, body.Difficulty), ct));
+    public async Task<ActionResult<RouteResponse>> Publish(Guid id, PublishRouteRequest body, CancellationToken ct) =>
+        Ok(await sharingService.PublishAsync(id, body, ct));
 
     /// <summary>Takes the route's trail out of Discover. Its reviews and photos are kept for when it's published again.</summary>
     [HttpPost("{id:guid}/unpublish")]
-    [ProducesResponseType<RouteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RouteResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<RouteDto>> Unpublish(Guid id, [FromServices] ICommandHandler<UnpublishRouteCommand, RouteDto> handler, CancellationToken ct) =>
-        FromResult(await handler.Handle(new UnpublishRouteCommand(id), ct));
+    public async Task<ActionResult<RouteResponse>> Unpublish(Guid id, CancellationToken ct) =>
+        Ok(await sharingService.UnpublishAsync(id, ct));
 
     /// <summary>
     /// The route as GPX: the track (one segment per day), every waypoint with overnight stops marked, and with
@@ -149,21 +160,9 @@ public sealed class RoutesController : ApiController
     [Produces("application/gpx+xml")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Gpx(Guid id, [FromQuery] bool pois, [FromServices] IQueryHandler<ExportRouteGpxQuery, (string FileName, string Gpx)> handler, CancellationToken ct)
+    public async Task<IActionResult> Gpx(Guid id, [FromQuery] bool pois, CancellationToken ct)
     {
-        var result = await handler.Handle(new ExportRouteGpxQuery(id, pois), ct);
-        return result.IsSuccess
-            ? File(Encoding.UTF8.GetBytes(result.Value.Gpx), "application/gpx+xml", result.Value.FileName)
-            : ProblemFor(result.Error!);
+        var file = await routeService.ExportGpxAsync(id, pois, ct);
+        return File(Encoding.UTF8.GetBytes(file.Content), "application/gpx+xml", file.FileName);
     }
 }
-
-public sealed record WaypointsRequest(IReadOnlyList<WaypointInput> Waypoints);
-
-public sealed record AlternativesRequest(WaypointInput From, WaypointInput To);
-
-public sealed record SaveRouteRequest(string Name, string? Description, IReadOnlyList<WaypointInput> Waypoints);
-
-public sealed record PublishRouteRequest(string Name, string? Description, string Region, PlanDifficulty Difficulty);
-
-public sealed record RouteNameResponse(string Name);

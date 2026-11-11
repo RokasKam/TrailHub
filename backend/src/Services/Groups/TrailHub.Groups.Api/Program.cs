@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
 using TrailHub.BuildingBlocks.Web;
-using TrailHub.Groups.Api;
+using TrailHub.Groups.Api.Hubs;
 using TrailHub.Groups.Application;
-using TrailHub.Groups.Application.Groups;
+using TrailHub.Groups.Application.Interfaces.Providers;
 using TrailHub.Groups.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,9 +32,3 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", false))
 }
 
 await app.RunAsync();
-
-/// <summary>SignalR user id = Auth0 subject, so <c>Clients.User(sub)</c> addresses every device of a person.</summary>
-internal sealed class SubjectUserIdProvider : IUserIdProvider
-{
-    public string? GetUserId(HubConnectionContext connection) => connection.User.FindFirst("sub")?.Value;
-}

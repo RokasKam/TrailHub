@@ -1,5 +1,5 @@
 using TrailHub.BuildingBlocks.Web;
-using TrailHub.Weather.Application.Forecasts;
+using TrailHub.Weather.Application;
 using TrailHub.Weather.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
