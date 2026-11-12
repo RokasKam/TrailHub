@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using TrailHub.Trips.Domain.Expenses;
 using TrailHub.Trips.Domain.Trips;
 
 namespace TrailHub.Trips.Infrastructure.Persistence.Configurations;
@@ -15,6 +16,7 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
         trip.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
         trip.HasIndex(t => new { t.OwnerId, t.StartDate });
         trip.HasIndex(t => t.GroupId);
+        trip.Property(t => t.Currency).HasMaxLength(3).IsRequired().HasDefaultValue(CurrencyCode.Default);
         trip.Ignore(t => t.DayCount);
         trip.Property<uint>("xmin").IsRowVersion();
 

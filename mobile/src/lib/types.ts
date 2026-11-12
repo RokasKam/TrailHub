@@ -271,6 +271,8 @@ export type TripSummary = {
   isOwner: boolean;
   /** Group gear nobody has claimed yet. */
   sharedUnclaimed: number;
+  /** ISO 4217 code every expense on the trip is converted to. */
+  currency: string;
 };
 export type ChecklistItemKind = 'Personal' | 'Shared';
 export type ChecklistItem = {
@@ -303,7 +305,77 @@ export type Trip = {
   members: TripMember[];
   /** A planned route for the whole trip; its day N is the trip's day N. */
   routeId: string | null;
+  /** ISO 4217 code every expense on the trip is converted to. Only the owner changes it, and only before anything is logged. */
+  currency: string;
+  /** In the trip currency. `myNet` > 0: others owe me; < 0: I owe. */
+  expenseSummary: { total: number; myNet: number; expenseCount: number };
 };
+
+// Trip expenses -----------------------------------------------------------------------------
+
+export type ExpenseCategory = 'Accommodation' | 'Food' | 'Transport' | 'Gear' | 'Fees' | 'Other';
+export type SplitMode = 'Equal' | 'Custom';
+export type TripPerson = { userId: string; displayName: string };
+export type Expense = {
+  id: string;
+  description: string;
+  category: ExpenseCategory;
+  paidBy: TripPerson;
+  /** In the expense's own `currency`. */
+  amount: number;
+  currency: string;
+  /** Trip-currency units per 1 unit of `currency` (1 when they're the same). */
+  rate: number;
+  amountInTripCurrency: number;
+  /** yyyy-MM-dd */
+  date: string;
+  splitMode: SplitMode;
+  /** Each person's share in the trip currency; sums exactly to `amountInTripCurrency`. */
+  shares: (TripPerson & { amount: number })[];
+  createdBy: string;
+  createdAtUtc: string;
+  canEdit: boolean;
+};
+export type TripPayment = {
+  id: string;
+  from: TripPerson;
+  to: TripPerson;
+  /** Trip currency. */
+  amount: number;
+  date: string;
+  recordedBy: string;
+  createdAtUtc: string;
+  canDelete: boolean;
+};
+/** `net` = paid − share + sent − received; > 0 means others owe this person. */
+export type Balance = { userId: string; displayName: string; paid: number; share: number; net: number; isMe: boolean };
+export type SettlementSuggestion = { from: TripPerson; to: TripPerson; amount: number };
+export type TripExpenses = {
+  currency: string;
+  total: number;
+  /** Newest date first. */
+  expenses: Expense[];
+  /** Newest first. */
+  payments: TripPayment[];
+  balances: Balance[];
+  suggestions: SettlementSuggestion[];
+  /** Current participants: the owner plus, for a group trip, the group's members. */
+  participants: TripPerson[];
+};
+export type ExpenseInput = {
+  description: string;
+  category: ExpenseCategory;
+  paidBy: string;
+  amount: number;
+  currency: string;
+  rate?: number;
+  date: string;
+  splitMode: SplitMode;
+  participants: string[];
+  customShares?: { userId: string; amount: number }[];
+};
+export type Currency = { code: string; name: string };
+export type ExchangeRate = { from: string; to: string; date: string; rate: number; source: string };
 
 export type GroupRole = 'Owner' | 'Member';
 export type GroupSummary = { id: string; name: string; memberCount: number; myRole: GroupRole; nextHikeAtUtc: string | null };

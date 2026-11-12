@@ -65,8 +65,9 @@ export function useGroupLiveLocation(groupId: string) {
 }
 
 /**
- * Watches an open trip over SignalR (/hubs/trips). The server only says "this trip changed"; the trip is
- * then reloaded over REST, so what's shown always comes from the same endpoint and permission checks.
+ * Watches an open trip over SignalR (/hubs/trips). The server only says "this trip changed" (checklist,
+ * expenses, payments…); the trip and its expenses are then reloaded over REST, so what's shown always comes
+ * from the same endpoints and permission checks.
  */
 export function useTripLiveUpdates(tripId: string, enabled: boolean) {
   const qc = useQueryClient();
@@ -79,6 +80,7 @@ export function useTripLiveUpdates(tripId: string, enabled: boolean) {
       .configureLogging(LogLevel.Warning)
       .build();
 
+    // A prefix match: also reloads the trip's expenses (`expenseKeys.forTrip` lives under the trip's key).
     const reload = () => qc.invalidateQueries({ queryKey: tripKeys.detail(tripId) });
     hub.on('TripChanged', () => {
       void reload();

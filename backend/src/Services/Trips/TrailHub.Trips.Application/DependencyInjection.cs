@@ -13,5 +13,7 @@ public static class DependencyInjection
             .AddScoped<ITripChecklistService, TripChecklistService>()
             .AddScoped<IGearListService, GearListService>()
             .AddScoped<IGearSuggestionService, GearSuggestionService>()
-            .AddScoped<IGroupMembershipService, GroupMembershipService>();
+            .AddScoped<IGroupMembershipService, GroupMembershipService>()
+            .AddScoped<ITripExpenseService, TripExpenseService>()
+            .AddScoped<IExchangeRateService, ExchangeRateService>();
 }

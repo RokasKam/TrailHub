@@ -1,4 +1,5 @@
 using TrailHub.BuildingBlocks.Domain;
+using TrailHub.Trips.Domain.Expenses;
 
 namespace TrailHub.Trips.Domain.Trips;
 
@@ -40,6 +41,9 @@ public sealed class Trip : AggregateRoot<Guid>
     public Guid? RouteId { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
+
+    /// <summary>The currency expenses are converted to and balances are kept in (ISO 4217).</summary>
+    public string Currency { get; private set; } = CurrencyCode.Default;
 
     public IReadOnlyList<TripDay> Days => _days;
 
@@ -156,6 +160,26 @@ public sealed class Trip : AggregateRoot<Guid>
         }
 
         day.Update(notes, overnight);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Sets the trip currency. Only while nothing is logged: amounts already converted to the old currency would
+    /// otherwise be wrong. Whether the code is a supported currency is checked by the caller.
+    /// </summary>
+    public Result SetCurrency(string? currency, bool ledgerIsEmpty)
+    {
+        if (CurrencyCode.Normalize(currency) is not { } code)
+        {
+            return TripErrors.InvalidCurrency;
+        }
+
+        if (code != Currency && !ledgerIsEmpty)
+        {
+            return TripErrors.CurrencyLocked;
+        }
+
+        Currency = code;
         return Result.Success();
     }
 

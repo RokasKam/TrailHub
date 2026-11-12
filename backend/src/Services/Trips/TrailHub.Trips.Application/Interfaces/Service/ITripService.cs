@@ -22,6 +22,9 @@ public interface ITripService
     /// <summary>Shares the trip with one of the owner's groups, or makes it private again (<c>GroupId = null</c>).</summary>
     Task<TripResponse> ShareAsync(Guid id, TripGroupRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Sets the currency expenses are kept in. Owner only, and only while no expenses or payments are logged.</summary>
+    Task<TripResponse> SetCurrencyAsync(Guid id, TripCurrencyRequest request, CancellationToken cancellationToken);
+
     /// <summary>Attaches a planned route to the trip (or detaches it with null). The route's days line up with the trip's days.</summary>
     Task<TripResponse> AttachRouteAsync(Guid id, TripRouteRequest request, CancellationToken cancellationToken);
 

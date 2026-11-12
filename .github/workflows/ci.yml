@@ -99,6 +99,9 @@ jobs:
       - name: Gear lists
         working-directory: backend
         run: node scripts/gear-lists-test.mjs
+      - name: Trip expenses
+        working-directory: backend
+        run: node scripts/trip-expenses-test.mjs
       - name: Hike feed
         working-directory: backend
         run: node scripts/hike-feed-test.mjs

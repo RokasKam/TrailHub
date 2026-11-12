@@ -1,4 +1,5 @@
 using TrailHub.BuildingBlocks.Domain;
+using TrailHub.Trips.Domain.Expenses;
 
 namespace TrailHub.Trips.Domain.Trips;
 
@@ -23,4 +24,18 @@ public static class TripErrors
     public static readonly Error NotYourItem = Error.Forbidden("Trip.NotYourItem", "Only the trip owner or the person who added it can remove this item.");
     public static readonly Error NotOwner = Error.Forbidden("Trip.NotOwner", "Only the trip owner can change the plan.");
     public static readonly Error GroupNotFound = Error.NotFound("Trip.GroupNotFound", "That group doesn't exist or you're not in it.");
+    public static readonly Error InvalidCurrency = Error.Validation("Trip.InvalidCurrency", "That isn't a supported currency (a three-letter ISO 4217 code such as EUR).");
+    public static readonly Error CurrencyLocked = Error.Conflict("Trip.CurrencyLocked", "The trip currency can only be changed while no expenses or payments are logged.");
+    public static readonly Error InvalidExpense = Error.Validation("Trip.InvalidExpense", $"An expense needs a description (at most {TripExpense.MaxDescriptionLength} characters), an amount above 0 and up to {Money.MaxExpenseAmount:0} with at most two decimals, and a sensible date.");
+    public static readonly Error RateRequired = Error.Validation("Trip.RateRequired", "An expense in another currency needs an exchange rate to the trip currency.");
+    public static readonly Error InvalidRate = Error.Validation("Trip.InvalidRate", "The exchange rate must be above 0 with at most six decimals, and give an amount of at least 0.01 in the trip currency.");
+    public static readonly Error NotAParticipant = Error.Validation("Trip.NotAParticipant", "Only people on the trip can pay, share a cost or settle up.");
+    public static readonly Error SplitMismatch = Error.Validation("Trip.SplitMismatch", "The custom amounts must add up exactly to the expense amount.");
+    public static readonly Error EmptySplit = Error.Validation("Trip.EmptySplit", "Pick at least one person to share the cost.");
+    public static readonly Error NotExpenseEditor = Error.Forbidden("Trip.NotExpenseEditor", "Only the person who added or paid this expense, or the trip owner, can change it.");
+    public static readonly Error ExpenseNotFound = Error.NotFound("Trip.ExpenseNotFound", "The expense does not exist.");
+    public static readonly Error InvalidPayment = Error.Validation("Trip.InvalidPayment", "A payment needs two different people, an amount above 0 with at most two decimals, and a sensible date.");
+    public static readonly Error NotPaymentEditor = Error.Forbidden("Trip.NotPaymentEditor", "Only the person who recorded this payment, the two people in it, or the trip owner can delete it.");
+    public static readonly Error PaymentNotFound = Error.NotFound("Trip.PaymentNotFound", "The payment does not exist.");
+    public static readonly Error RatesUnavailable = Error.Unavailable("Trip.RatesUnavailable", "Exchange rates are unavailable right now. Enter the rate yourself or try again later.");
 }

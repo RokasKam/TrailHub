@@ -14,4 +14,5 @@ public sealed record TripSummaryResponse(
     Guid? GroupId,
     string? GroupName,
     bool IsOwner,
-    int SharedUnclaimed);
+    int SharedUnclaimed,
+    string Currency);

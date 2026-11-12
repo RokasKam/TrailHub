@@ -6,7 +6,7 @@ namespace TrailHub.Trips.Application.Mappings;
 
 internal static class TripMappings
 {
-    public static TripResponse ToResponse(this Trip t, string viewerId, GroupInfo? group)
+    public static TripResponse ToResponse(this Trip t, string viewerId, GroupInfo? group, ExpenseSummaryResponse expenseSummary)
     {
         var personal = t.Checklist.Where(i => i.Kind == ChecklistItemKind.Personal).ToList();
         return new TripResponse(
@@ -41,7 +41,9 @@ internal static class TripMappings
                     .OrderByDescending(m => m.IsOwner)
                     .ThenBy(m => m.DisplayName)
                     .ToList(),
-            t.RouteId);
+            t.RouteId,
+            t.Currency,
+            expenseSummary);
     }
 
     public static TripSummaryResponse ToSummaryResponse(this Trip t, string viewerId, GroupInfo? group) => new(
@@ -55,5 +57,6 @@ internal static class TripMappings
         t.GroupId,
         group?.Name,
         t.OwnerId == viewerId,
-        t.GroupId is null ? 0 : t.Checklist.Count(i => i.Kind == ChecklistItemKind.Shared && i.ClaimedBy is null));
+        t.GroupId is null ? 0 : t.Checklist.Count(i => i.Kind == ChecklistItemKind.Shared && i.ClaimedBy is null),
+        t.Currency);
 }

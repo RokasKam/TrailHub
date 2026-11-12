@@ -63,6 +63,16 @@ public sealed class TripsController(
     public async Task<ActionResult<TripResponse>> Share(Guid id, TripGroupRequest body, CancellationToken ct) =>
         Ok(await tripService.ShareAsync(id, body, ct));
 
+    /// <summary>Sets the trip currency (ISO 4217, e.g. <c>CHF</c>) that expenses are converted to. Owner only.</summary>
+    /// <remarks>Trips start in EUR. The currency can only change while no expenses or payments are logged (409 <c>Trip.CurrencyLocked</c>).</remarks>
+    [HttpPut("{id:guid}/currency")]
+    [ProducesResponseType<TripResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TripResponse>> SetCurrency(Guid id, TripCurrencyRequest body, CancellationToken ct) =>
+        Ok(await tripService.SetCurrencyAsync(id, body, ct));
+
     /// <summary>Attaches a planned route (from the Routes service) to the trip, or detaches it with <c>routeId: null</c>. Owner only.</summary>
     /// <remarks>The route's day N is shown with the trip's day N. To let a group see it, share the route with the same group.</remarks>
     [HttpPut("{id:guid}/route")]

@@ -7,12 +7,16 @@ using TrailHub.Trips.Application.Mappings;
 using TrailHub.Trips.Application.Models;
 using TrailHub.Trips.Application.Requests;
 using TrailHub.Trips.Application.Responses;
+using TrailHub.Trips.Domain.Expenses;
 using TrailHub.Trips.Domain.Trips;
 
 namespace TrailHub.Trips.Application.Services;
 
 internal sealed class TripService(
     ITripRepository trips,
+    ITripExpenseRepository expenses,
+    ITripPaymentRepository payments,
+    IExchangeRateService exchangeRates,
     IGroupDirectory directory,
     TripEditor editor,
     IUnitOfWork unitOfWork,
@@ -48,7 +52,7 @@ internal sealed class TripService(
     public async Task<TripResponse> GetTripAsync(Guid id, CancellationToken cancellationToken)
     {
         var (trip, group) = await editor.LoadVisibleAsync(id, cancellationToken);
-        return trip.ToResponse(user.UserId, group);
+        return await editor.ToResponseAsync(trip, group, cancellationToken);
     }
 
     public async Task<TripResponse> CreateAsync(CreateTripRequest request, CancellationToken cancellationToken)
@@ -63,7 +67,7 @@ internal sealed class TripService(
 
         trips.Add(trip);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return trip.ToResponse(user.UserId, group);
+        return trip.ToResponse(user.UserId, group, new ExpenseSummaryResponse(0, 0, 0));
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -91,7 +95,29 @@ internal sealed class TripService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await notifier.TripChangedAsync(trip.Id, cancellationToken);
-        return trip.ToResponse(user.UserId, group);
+        return await editor.ToResponseAsync(trip, group, cancellationToken);
+    }
+
+    public async Task<TripResponse> SetCurrencyAsync(Guid id, TripCurrencyRequest request, CancellationToken cancellationToken)
+    {
+        var (trip, group) = await editor.LoadVisibleAsync(id, cancellationToken);
+        if (trip.OwnerId != user.UserId)
+        {
+            throw TripErrors.NotOwner.ToException();
+        }
+
+        // Supported: what the rate provider knows, plus the trip's current currency.
+        var code = CurrencyCode.Normalize(request.Currency);
+        if (code is null || (code != trip.Currency && !(await exchangeRates.GetCurrenciesAsync(cancellationToken)).Any(c => c.Code == code)))
+        {
+            throw TripErrors.InvalidCurrency.ToException();
+        }
+
+        var ledgerIsEmpty = !await expenses.AnyForTripAsync(trip.Id, cancellationToken) && !await payments.AnyForTripAsync(trip.Id, cancellationToken);
+        trip.SetCurrency(code, ledgerIsEmpty).ThrowIfFailure();
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await notifier.TripChangedAsync(trip.Id, cancellationToken);
+        return await editor.ToResponseAsync(trip, group, cancellationToken);
     }
 
     public Task<TripResponse> AttachRouteAsync(Guid id, TripRouteRequest request, CancellationToken cancellationToken) =>
