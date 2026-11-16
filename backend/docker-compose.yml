@@ -144,6 +144,17 @@ services:
       Routing__Provider: ${ROUTING_PROVIDER:-}
       Routing__OpenRouteService__ApiKey: ${OPENROUTESERVICE_API_KEY:-}
 
+  notifications-api:
+    <<: *service
+    build: { context: ., args: { PROJECT: src/Services/Notifications/TrailHub.Notifications.Api, APP_DLL: TrailHub.Notifications.Api.dll } }
+    environment:
+      <<: *service-env
+      ConnectionStrings__NotificationsDb: Host=postgres;Database=trailhub_notifications;Username=${POSTGRES_USER:-trailhub};Password=${POSTGRES_PASSWORD:-trailhub}
+      # Expo push. PUSH_ENABLED=false only logs what would be sent (CI). EXPO_ACCESS_TOKEN is needed only when
+      # "enhanced push security" is on for the Expo project.
+      Push__Enabled: ${PUSH_ENABLED:-true}
+      Push__Expo__AccessToken: ${EXPO_ACCESS_TOKEN:-}
+
   weather-api:
     <<: *service
     build: { context: ., args: { PROJECT: src/Services/Weather/TrailHub.Weather.Api, APP_DLL: TrailHub.Weather.Api.dll } }
@@ -154,7 +165,7 @@ services:
     build: { context: ., args: { PROJECT: src/Gateway/TrailHub.Gateway, APP_DLL: TrailHub.Gateway.dll } }
     restart: unless-stopped
     ports: ["8080:8080"]
-    depends_on: [profile-api, trails-api, activity-api, trips-api, groups-api, routes-api, weather-api]
+    depends_on: [profile-api, trails-api, activity-api, trips-api, groups-api, routes-api, weather-api, notifications-api]
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ReverseProxy__Clusters__profile__Destinations__d1__Address: http://profile-api:8080
@@ -164,6 +175,7 @@ services:
       ReverseProxy__Clusters__groups__Destinations__d1__Address: http://groups-api:8080
       ReverseProxy__Clusters__routes__Destinations__d1__Address: http://routes-api:8080
       ReverseProxy__Clusters__weather__Destinations__d1__Address: http://weather-api:8080
+      ReverseProxy__Clusters__notifications__Destinations__d1__Address: http://notifications-api:8080
       ReverseProxy__Clusters__photos__Destinations__d1__Address: http://seaweedfs:8333
 
 volumes:

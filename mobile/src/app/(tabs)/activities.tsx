@@ -7,6 +7,7 @@ import { useFeed } from '@/api/feed';
 import { useUnits } from '@/api/profile';
 import { BarChart } from '@/components/charts';
 import { FeedPostCard } from '@/components/feed-post-card';
+import { HeaderActions, NotificationBell } from '@/components/notification-bell';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, EmptyState, Icon, IconButton, List, ListRow, PageHeader, QueryState, Screen, Section, Segmented, Stat, StatRow } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -67,7 +68,12 @@ function MyHikes({ toggle }: { toggle: ReactNode }) {
       <PageHeader
         eyebrow={year ? `${year.hikes} hike${year.hikes === 1 ? '' : 's'} this year` : undefined}
         title="Hikes"
-        action={<IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickGpx} />}
+        action={
+          <HeaderActions>
+            <IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickGpx} />
+            <NotificationBell />
+          </HeaderActions>
+        }
       />
       {toggle}
 
@@ -168,7 +174,7 @@ function Feed({ toggle }: { toggle: ReactNode }) {
         void feed.refetch();
       }}
       onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && void feed.fetchNextPage()}>
-      <PageHeader eyebrow="Your groups" title="Hikes" />
+      <PageHeader eyebrow="Your groups" title="Hikes" action={<NotificationBell />} />
       {toggle}
 
       {groups.length > 1 && (

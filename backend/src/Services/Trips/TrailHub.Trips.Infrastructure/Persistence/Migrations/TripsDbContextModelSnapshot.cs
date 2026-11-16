@@ -207,6 +207,9 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
 
+                    b.Property<DateTime?>("GearReminderSentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uuid");
 
@@ -240,6 +243,8 @@ namespace TrailHub.Trips.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GroupId");
+
+                    b.HasIndex("StartDate");
 
                     b.HasIndex("OwnerId", "StartDate");
 

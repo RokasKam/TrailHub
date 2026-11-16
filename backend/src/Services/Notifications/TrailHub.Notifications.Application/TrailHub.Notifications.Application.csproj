@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../TrailHub.Notifications.Domain/TrailHub.Notifications.Domain.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/TrailHub.BuildingBlocks.Application/TrailHub.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/TrailHub.Contracts/TrailHub.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Unit tests drive the services with in-memory fakes. -->
+    <InternalsVisibleTo Include="TrailHub.UnitTests" />
+  </ItemGroup>
+</Project>

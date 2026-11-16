@@ -9,6 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'TrailHub',
   slug: 'trailhub',
+  owner: 'rokasss9',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
@@ -33,6 +34,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    // Android push tokens need Firebase (FCM). Point this at the google-services.json from the Firebase console
+    // (e.g. GOOGLE_SERVICES_FILE=./google-services.json); without it Android simply skips push registration.
+    ...(process.env.GOOGLE_SERVICES_FILE && { googleServicesFile: process.env.GOOGLE_SERVICES_FILE }),
   },
   plugins: [
     'expo-router',
@@ -66,6 +70,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     '@react-native-community/datetimepicker',
     'expo-sharing',
     'expo-secure-store',
+    // Android: tint the tray icon with the brand green; FCM messages without a channel land in "default"
+    // (created at runtime in src/notifications/push.ts with high importance).
+    ['expo-notifications', { color: '#1F7A4D', defaultChannel: 'default' }],
   ],
   experiments: { typedRoutes: true, reactCompiler: true },
+  extra: {
+    ...config.extra,
+    // Expo push tokens need the EAS project id (not a secret). EAS_PROJECT_ID overrides it, e.g. for a fork with its
+    // own EAS project. Without one the app still works: the inbox loads and push registration is skipped.
+    eas: { ...config.extra?.eas, projectId: process.env.EAS_PROJECT_ID ?? '37e8ee29-45e8-46e3-b913-e449a38c3776' },
+  },
 });

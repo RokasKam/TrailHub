@@ -19,6 +19,11 @@ internal sealed class TripRepository(TripsDbContext db) : ITripRepository
     public async Task<IReadOnlyList<Trip>> GetByGroupAsync(Guid groupId, CancellationToken cancellationToken) =>
         await db.Trips.Where(t => t.GroupId == groupId).OrderBy(t => t.StartDate).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Trip>> GetGearReminderCandidatesAsync(DateOnly startDate, CancellationToken cancellationToken) =>
+        await db.Trips
+            .Where(t => t.StartDate == startDate && t.GroupId != null && t.Status == TripStatus.Planned && t.GearReminderSentAtUtc == null)
+            .ToListAsync(cancellationToken);
+
     public void Add(Trip trip) => db.Trips.Add(trip);
 
     public void Remove(Trip trip) => db.Trips.Remove(trip);

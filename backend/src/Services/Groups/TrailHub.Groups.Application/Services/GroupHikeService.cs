@@ -34,7 +34,7 @@ internal sealed class GroupHikeService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await events.PublishAsync(
-            new GroupHikeScheduledIntegrationEvent(group.Id, hike.Id, hike.Title, hike.ScheduledAtUtc, group.Members.Select(m => m.UserId).ToList()),
+            new GroupHikeScheduledIntegrationEvent(group.Id, hike.Id, hike.Title, hike.ScheduledAtUtc, group.Members.Select(m => m.UserId).ToList(), group.Name, user.UserId),
             cancellationToken);
         return hike.ToResponse();
     }

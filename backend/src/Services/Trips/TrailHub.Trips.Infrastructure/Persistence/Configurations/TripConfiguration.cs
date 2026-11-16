@@ -18,6 +18,8 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
         trip.HasIndex(t => t.GroupId);
         trip.Property(t => t.Currency).HasMaxLength(3).IsRequired().HasDefaultValue(CurrencyCode.Default);
         trip.Ignore(t => t.DayCount);
+        trip.Ignore(t => t.UnclaimedGroupItemCount);
+        trip.HasIndex(t => t.StartDate); // the daily gear-reminder scan
         trip.Property<uint>("xmin").IsRowVersion();
 
         trip.OwnsMany(t => t.Days, day =>

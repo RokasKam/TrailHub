@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using TrailHub.BuildingBlocks.Application.Exceptions;
 using TrailHub.Weather.Application.Interfaces.Providers;
 using TrailHub.Weather.Domain.Forecasts;
 
@@ -10,7 +13,7 @@ namespace TrailHub.Weather.Infrastructure.Providers.OpenMeteo;
 /// <see href="https://open-meteo.com/en/docs">Open-Meteo</see>: free for non-commercial use, no API key.
 /// For commercial use, buy a plan and set <c>Weather:OpenMeteo:BaseUrl</c> / <c>ApiKey</c>.
 /// </summary>
-internal sealed class OpenMeteoWeatherProvider(HttpClient http, IConfiguration configuration) : IWeatherProvider
+internal sealed class OpenMeteoWeatherProvider(HttpClient http, IConfiguration configuration, ILogger<OpenMeteoWeatherProvider> logger) : IWeatherProvider
 {
     private const string Current = "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day";
     private const string Daily = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset";
@@ -30,8 +33,18 @@ internal sealed class OpenMeteoWeatherProvider(HttpClient http, IConfiguration c
             url += $"&apikey={Uri.EscapeDataString(apiKey)}";
         }
 
-        var response = await http.GetFromJsonAsync<OpenMeteoForecastResponse>(url, cancellationToken)
-            ?? throw new InvalidOperationException("Open-Meteo returned an empty response.");
-        return response.ToForecast(elevationMeters);
+        try
+        {
+            var response = await http.GetFromJsonAsync<OpenMeteoForecastResponse>(url, cancellationToken)
+                ?? throw new JsonException("Open-Meteo returned an empty response.");
+            return response.ToForecast(elevationMeters);
+        }
+        catch (Exception e) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Open-Meteo is down, rate-limiting (429), timing out (including the resilience handler's own timeout
+            // exception) or sent something unreadable: a 503 the app can retry, not a 500.
+            logger.LogWarning(e, "Open-Meteo request failed");
+            throw ForecastErrors.Unavailable.ToException();
+        }
     }
 }

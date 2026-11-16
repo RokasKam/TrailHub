@@ -28,6 +28,7 @@ jobs:
           - { name: groups-api, project: src/Services/Groups/TrailHub.Groups.Api, dll: TrailHub.Groups.Api.dll }
           - { name: routes-api, project: src/Services/Routes/TrailHub.Routes.Api, dll: TrailHub.Routes.Api.dll }
           - { name: weather-api, project: src/Services/Weather/TrailHub.Weather.Api, dll: TrailHub.Weather.Api.dll }
+          - { name: notifications-api, project: src/Services/Notifications/TrailHub.Notifications.Api, dll: TrailHub.Notifications.Api.dll }
     steps:
       - uses: actions/checkout@v4
         with:

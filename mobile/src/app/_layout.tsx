@@ -11,6 +11,7 @@ import { SessionProvider, useSession } from '@/auth/session';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Colors } from '@/constants/theme';
 import { persistOptions, queryClient } from '@/lib/query-client';
+import { NotificationsBridge } from '@/notifications/bridge';
 import { useSyncStore } from '@/stores/sync-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -40,39 +41,43 @@ function RootStack() {
 
   const signedIn = status === 'signedIn';
   return (
-    <Stack
-      screenOptions={{
-        headerBackButtonDisplayMode: 'minimal',
-        // Android's Material header is opaque: give it the page colour and no shadow so it reads as part of the page,
-        // like iOS's translucent header. iOS keeps the system (Liquid Glass) look.
-        ...(Platform.OS === 'android' && {
-          headerStyle: { backgroundColor: colors.background },
-          headerShadowVisible: false,
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: '600' },
-        }),
-      }}>
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="trail/[id]" options={{ title: '' }} />
-        <Stack.Screen name="activity/[id]" options={{ title: 'Hike' }} />
-        <Stack.Screen name="activity/share" options={{ title: 'Share hike', presentation: 'modal' }} />
-        <Stack.Screen name="feed/[id]" options={{ title: 'Hike' }} />
-        <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
-        <Stack.Screen name="trips/[id]" options={{ title: 'Trip' }} />
-        <Stack.Screen name="trips/[id]/expenses" options={{ title: 'Expenses' }} />
-        <Stack.Screen name="trips/[id]/expense" options={{ title: 'Expense', presentation: 'modal' }} />
-        <Stack.Screen name="groups/index" options={{ title: 'Groups' }} />
-        <Stack.Screen name="routes/plan" options={{ title: 'Multi-day planner' }} />
-        <Stack.Screen name="moderation" options={{ title: 'Moderation' }} />
-        <Stack.Screen name="gear/index" options={{ title: 'Gear lists' }} />
-        <Stack.Screen name="gear/[id]" options={{ title: 'Gear list' }} />
-        <Stack.Screen name="routes/[id]" options={{ title: 'Route' }} />
-        <Stack.Screen name="groups/[id]" options={{ title: 'Group' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {signedIn && <NotificationsBridge />}
+      <Stack
+        screenOptions={{
+          headerBackButtonDisplayMode: 'minimal',
+          // Android's Material header is opaque: give it the page colour and no shadow so it reads as part of the page,
+          // like iOS's translucent header. iOS keeps the system (Liquid Glass) look.
+          ...(Platform.OS === 'android' && {
+            headerStyle: { backgroundColor: colors.background },
+            headerShadowVisible: false,
+            headerTintColor: colors.text,
+            headerTitleStyle: { fontWeight: '600' },
+          }),
+        }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="trail/[id]" options={{ title: '' }} />
+          <Stack.Screen name="activity/[id]" options={{ title: 'Hike' }} />
+          <Stack.Screen name="activity/share" options={{ title: 'Share hike', presentation: 'modal' }} />
+          <Stack.Screen name="feed/[id]" options={{ title: 'Hike' }} />
+          <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
+          <Stack.Screen name="trips/[id]" options={{ title: 'Trip' }} />
+          <Stack.Screen name="trips/[id]/expenses" options={{ title: 'Expenses' }} />
+          <Stack.Screen name="trips/[id]/expense" options={{ title: 'Expense', presentation: 'modal' }} />
+          <Stack.Screen name="groups/index" options={{ title: 'Groups' }} />
+          <Stack.Screen name="routes/plan" options={{ title: 'Multi-day planner' }} />
+          <Stack.Screen name="moderation" options={{ title: 'Moderation' }} />
+          <Stack.Screen name="gear/index" options={{ title: 'Gear lists' }} />
+          <Stack.Screen name="gear/[id]" options={{ title: 'Gear list' }} />
+          <Stack.Screen name="routes/[id]" options={{ title: 'Route' }} />
+          <Stack.Screen name="groups/[id]" options={{ title: 'Group' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }

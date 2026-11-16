@@ -5,3 +5,4 @@ CREATE DATABASE trailhub_activity;
 CREATE DATABASE trailhub_trips;
 CREATE DATABASE trailhub_groups;
 CREATE DATABASE trailhub_routes;
+CREATE DATABASE trailhub_notifications;

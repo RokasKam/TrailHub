@@ -10,6 +10,7 @@ using TrailHub.Activity.Domain.Feed;
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Application.Exceptions;
 using TrailHub.BuildingBlocks.Domain.Geo;
+using TrailHub.Contracts;
 
 namespace TrailHub.Activity.Application.Services;
 
@@ -22,6 +23,7 @@ internal sealed class HikeFeedService(
     IModerators moderators,
     IHikePhotoStorage storage,
     IUnitOfWork unitOfWork,
+    IEventPublisher events,
     ICurrentUser user,
     TimeProvider clock) : IHikeFeedService
 {
@@ -77,11 +79,17 @@ internal sealed class HikeFeedService(
 
     public async Task<LikeResponse> LikeAsync(Guid id, CancellationToken cancellationToken)
     {
-        var (activity, _) = await GetVisibleAsync(id, cancellationToken);
+        var (activity, myGroups) = await GetVisibleAsync(id, cancellationToken);
         if (await likes.GetAsync(activity.Id, user.UserId, cancellationToken) is null)
         {
             likes.Add(HikeLike.Create(activity.Id, user.UserId, clock.GetUtcNow().UtcDateTime));
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Only a new like is announced; liking again is a no-op above.
+            var names = await NamesAsync(myGroups, [user.UserId], cancellationToken);
+            await events.PublishAsync(
+                new HikeLikedIntegrationEvent(activity.Id, activity.UserId, activity.Name, user.UserId, names.For(user.UserId, activity.SharedGroupIds)),
+                cancellationToken);
         }
 
         return new LikeResponse(await LikeCountAsync(activity.Id, cancellationToken), true);
@@ -107,7 +115,11 @@ internal sealed class HikeFeedService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var names = await NamesAsync(myGroups, [user.UserId], cancellationToken);
-        return comment.ToResponse(names.For(user.UserId, activity.SharedGroupIds), user.UserId, activity.UserId, moderators.IsModerator(user.UserId));
+        var commenterName = names.For(user.UserId, activity.SharedGroupIds);
+        await events.PublishAsync(
+            new HikeCommentedIntegrationEvent(activity.Id, activity.UserId, activity.Name, comment.Id, user.UserId, commenterName, Excerpt(comment.Text)),
+            cancellationToken);
+        return comment.ToResponse(commenterName, user.UserId, activity.UserId, moderators.IsModerator(user.UserId));
     }
 
     public async Task DeleteCommentAsync(Guid id, Guid commentId, CancellationToken cancellationToken)
@@ -132,6 +144,10 @@ internal sealed class HikeFeedService(
         await ContentRemoval.RemoveReportsAsync(comment.Id, reports, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>The start of a comment for a notification: at most 120 characters.</summary>
+    private static string Excerpt(string text) =>
+        text.Length <= 120 ? text : string.Concat(text.AsSpan(0, 119).TrimEnd(), "…");
 
     private Task<(HikeActivity Activity, IReadOnlyList<GroupInfo> MyGroups)> GetVisibleAsync(Guid id, CancellationToken cancellationToken) =>
         activities.GetVisibleAsync(directory, id, user.UserId, cancellationToken);

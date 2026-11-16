@@ -30,6 +30,7 @@ scripts/   use-auth0.sh: writes the Auth0 settings for backend and mobile
 | **Trips** | Multi-day trips with a plan per day, overnight stops, an attached route, and a packing checklist. Group trips sync live between members, who can claim group items. **Gear lists**: reusable packing lists, starter lists, and suggestions based on the trip (huts, tent nights, altitude, long days). |
 | **Groups** | Invite codes, scheduled group hikes with RSVPs and meeting points, and live location on a shared map. |
 | **Moderation** | Report trails, trail photos, hike photos and comments. Three reports hide an item until a moderator reviews it. Moderators get a queue with Restore, Hide and Delete. |
+| **Notifications** | Push notifications (Expo) and an in-app inbox with an unread badge: likes (batched per hike) and comments on your shared hikes; group hikes, new members and hikes shared with your groups; trip expenses you share, payments to or from you, and a reminder two days before a group trip when group gear is unclaimed. One push switch per category; the inbox records everything. |
 | **Profile** | Profile, units and map preferences, hiking totals and achievements. |
 
 ## Architecture
@@ -44,13 +45,13 @@ flowchart LR
     app -- "HTTPS + JWT<br/>WSS (SignalR)" --> gw
     gw --> services
 
-    services["<b>Services</b> · ASP.NET Core<br/>Profile · Trails · Activity<br/>Trips · Groups (SignalR hubs)<br/>Routes · Weather"]
+    services["<b>Services</b> · ASP.NET Core<br/>Profile · Trails · Activity<br/>Trips · Groups (SignalR hubs)<br/>Routes · Weather · Notifications"]
 
     mq{{"RabbitMQ<br/>(MassTransit)<br/>integration events"}}
     pg[("PostgreSQL + PostGIS<br/>one database per service<br/>(all but Weather)")]
     redis[("Redis<br/>live locations · SignalR backplane<br/>routing and forecast caches")]
     s3[("S3 photo storage<br/>Trails, Activity")]
-    ext(["Mapbox · Overpass<br/>Photon · Open-Meteo<br/>(Routes, Weather)"])
+    ext(["Mapbox · Overpass<br/>Photon · Open-Meteo<br/>Expo Push<br/>(Routes, Weather, Notifications)"])
 
     services <-- "publish / consume" --> mq
     services --> pg
@@ -84,9 +85,9 @@ backend/
       TrailHub.BuildingBlocks.Infrastructure/ EF Core + PostGIS helpers, MassTransit setup, GPX serializer
       TrailHub.BuildingBlocks.Web/           service defaults: auth, problem details, exception handler, Swagger, health
       TrailHub.Contracts/                    integration events, the only thing services share
-    Services/<Service>/                    Profile, Trails, Activity, Trips, Groups, Routes, Weather
+    Services/<Service>/                    Profile, Trails, Activity, Trips, Groups, Routes, Weather, Notifications
   tests/
-    TrailHub.UnitTests/                    domain rules (one test class per file)
+    TrailHub.UnitTests/                    domain rules, plus Notifications services with fakes (one test class per file)
     TrailHub.ArchitectureTests/            layering and dependency rules (fail the build when broken)
   scripts/                                 end-to-end tests against the running stack (see Testing)
   infra/                                   Postgres init, SeaweedFS (S3) config, Auth0 action
@@ -170,13 +171,14 @@ sequenceDiagram
 | **Profile** | Profile, preferences, hiking totals, achievements | Postgres | consumes hike events |
 | **Trails** | Trails, GPX import/export, points of interest, elevation profiles, favourites, reviews, condition reports, trail photos, trail and photo moderation | Postgres + **PostGIS** (GiST indexes for radius/area search, trigram indexes for text search, `jsonb` routes) · photos in **S3** | consumes route publish events |
 | **Activity** | Recorded and imported hikes (segments, statistics, GPX export), **hike feed** (sharing, photos, likes, comments, track privacy), comment and hike photo moderation | Postgres + PostGIS (`multilinestring` per hike) · photos in S3 | publishes hike events; group membership read model |
-| **Trips** | Multi-day trips, days and overnight stops, attached route, checklists (personal and group items with claims), gear lists and packing suggestions | Postgres · Redis (SignalR backplane) | group membership read model; live updates on `/hubs/trips` |
+| **Trips** | Multi-day trips, days and overnight stops, attached route, checklists (personal and group items with claims), gear lists and packing suggestions, expenses and payments | Postgres · Redis (SignalR backplane) | group membership read model; live updates on `/hubs/trips`; publishes expense, payment and gear-reminder events (hourly job) |
 | **Groups** | Groups, invite codes, members, scheduled group hikes with RSVPs and meeting points, **live location** | Postgres · Redis (positions expire after 15 min; SignalR backplane) | publishes membership and group hike events; `/hubs/groups` |
 | **Routes** | Route editor and multi-day planner: snapping, elevation, walking time, POIs, place search, name suggestions, alternatives, itinerary planner, sharing with groups, publishing to Discover | Postgres · Redis (routing, POI and elevation cache) | Mapbox (Directions, Terrain-DEM, Search Box, Tilequery) with OSM fallbacks (Overpass, Photon, Open-Meteo elevation) |
 | **Weather** | Current conditions, 16-day forecasts adjusted to trail elevation, a hiking suitability rating per day | Redis cache only | Open-Meteo |
+| **Notifications** | Inbox items (likes batched per hike), push devices (Expo push tokens), push switches per category | Postgres | consumes feed, group and trip events; group membership read model; Expo Push API |
 
 Each service is a separate ASP.NET Core app with its own Swagger document (`/swagger` on the service, or one combined UI
-on the gateway). The backend serves 111 operations in all; `scripts/api-sweep.mjs` calls every one of them.
+on the gateway). The backend serves 119 operations in all; `scripts/api-sweep.mjs` calls every one of them.
 
 ## Events between services
 
@@ -186,7 +188,9 @@ flowchart LR
     groups["Groups"] -- "GroupMembersChanged" --> trips["Trips"]
     groups -- "GroupMembersChanged" --> routes["Routes"]
     groups -- "GroupMembersChanged" --> activity
-    groups -- "GroupHikeScheduled" --> none(["no consumer yet<br/>(push notifications)"])
+    groups -- "GroupMembersChanged<br/>GroupHikeScheduled" --> notifications["Notifications"]
+    activity -- "HikeLiked · HikeCommented<br/>HikeShared" --> notifications
+    trips -- "TripExpenseAdded · TripPaymentRecorded<br/>TripGearUnclaimed" --> notifications
     routes -- "RoutePublished<br/>RouteUnpublished" --> trails["Trails"]
 ```
 
@@ -194,8 +198,12 @@ flowchart LR
 |-------|--------------|-------------|-----|
 | `ActivityCompleted` | Activity, when a hike is recorded or imported | Profile | update totals, unlock achievements |
 | `ActivityDeleted` | Activity | Profile | take the hike back out of the totals |
-| `GroupMembersChanged` | Groups, on every membership change, and for every group when Groups starts | Trips, Routes, Activity | replace their copy of the group's members; it decides who can see group trips, shared routes and feed posts |
-| `GroupHikeScheduled` | Groups | (none yet) | ready for push notifications |
+| `GroupMembersChanged` | Groups, on every membership change, and for every group when Groups starts | Trips, Routes, Activity, Notifications | replace their copy of the group's members; it decides who can see group trips, shared routes and feed posts. Notifications compares each snapshot with the previous one to tell members who joined |
+| `GroupHikeScheduled` | Groups (with the group name and who scheduled it) | Notifications | tell the other members |
+| `HikeLiked` / `HikeCommented` | Activity, on a new like (not a repeat) or comment | Notifications | tell the hike's owner; likes are batched into one item per hike, pushed at most every 10 minutes |
+| `HikeShared` | Activity, on the first share and for groups added later | Notifications | tell the members of the newly added groups |
+| `TripExpenseAdded` / `TripPaymentRecorded` | Trips | Notifications | tell the people sharing the expense, or the side of the payment that didn't record it |
+| `TripGearUnclaimed` | Trips, from an hourly job, once per group trip two days before it starts | Notifications | remind members about unclaimed group gear |
 | `RoutePublished` / `RouteUnpublished` | Routes | Trails | create, update or hide the Discover trail that has the route's id |
 
 MassTransit queue names include the consumer's namespace, so each service gets its own queue and its own copy of every
@@ -250,11 +258,11 @@ mobile/
 
 | What | Where | Runs |
 |------|-------|------|
-| Unit tests (domain rules: trails, hikes, trips, groups, routing, planner, gear, feed, moderation) | `backend/tests/TrailHub.UnitTests` | `./build.sh 'dotnet test TrailHub.slnx'` |
+| Unit tests (domain rules: trails, hikes, trips, groups, routing, planner, gear, feed, moderation; notification batching, preferences and the Expo sender) | `backend/tests/TrailHub.UnitTests` | `./build.sh 'dotnet test TrailHub.slnx'` |
 | Architecture tests (layering, dependencies, no nested types, controllers → services) | `backend/tests/TrailHub.ArchitectureTests` | same |
 | Smoke test: 52 checks through the gateway | `backend/scripts/smoke-test.sh` | stack in `AUTH_MODE=Development` |
-| Feature suites: SignalR, group trips, gear lists, hike feed, route sharing, moderation, content moderation | `backend/scripts/*-test.mjs` | `node scripts/<name>.mjs` |
-| API sweep: calls every endpoint (111 operations), checks statuses and error shapes, fails if one is skipped | `backend/scripts/api-sweep.mjs` | `node scripts/api-sweep.mjs` |
+| Feature suites: SignalR, group trips, gear lists, trip expenses, notifications, hike feed, route sharing, moderation, content moderation | `backend/scripts/*-test.mjs` | `node scripts/<name>.mjs` |
+| API sweep: calls every endpoint (119 operations), checks statuses and error shapes, fails if one is skipped | `backend/scripts/api-sweep.mjs` | `node scripts/api-sweep.mjs` |
 | Mobile type check and lint | `mobile/` | `npx tsc --noEmit && npx expo lint` |
 
 **CI** (`.github/workflows/ci.yml`) runs on every push and pull request in three jobs:
@@ -296,6 +304,10 @@ to avoid clashes: Postgres `55432`, Redis `56379`, RabbitMQ `55672` (UI `55673`)
 - **Routing:** `MAPBOX_ACCESS_TOKEN` turns on Mapbox routing, elevation, place search and POIs. Without it, routes
   are straight lines and the OSM services (Overpass, Photon, Open-Meteo elevation) fill in. `Routing__Provider` can
   also choose `OpenRouteService` (needs its own key; adds SAC trail grades) or `StraightLine`.
+- **Push notifications:** the Notifications service sends through the Expo push API; it needs no key unless
+  "enhanced push security" is on for the Expo project (then set `EXPO_ACCESS_TOKEN`). `PUSH_ENABLED=false` only logs
+  what would be sent (CI does this). The inbox works either way; the app registers for pushes once it has an EAS
+  project id (`eas init`).
 
 ### 2. Mobile
 
@@ -359,8 +371,6 @@ until you stop it or leave the group.
 
 ## Not built yet
 
-- **Push notifications.** `GroupHikeScheduled` is already published; likes, comments and trip changes could use it
-  too. It needs a notifications service with Expo Push (and an EAS project id).
 - **Transactional outbox.** The MassTransit EF outbox would guarantee an event can't be lost between the database
   commit and publishing.
 - **Android testing.** Android builds and runs, but only the sign-in screen has been checked.

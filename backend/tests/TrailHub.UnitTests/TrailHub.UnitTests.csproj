@@ -16,6 +16,10 @@
     <ProjectReference Include="../../src/Services/Routes/TrailHub.Routes.Domain/TrailHub.Routes.Domain.csproj" />
     <ProjectReference Include="../../src/Services/Weather/TrailHub.Weather.Domain/TrailHub.Weather.Domain.csproj" />
     <ProjectReference Include="../../src/BuildingBlocks/TrailHub.BuildingBlocks.Infrastructure/TrailHub.BuildingBlocks.Infrastructure.csproj" />
+    <!-- Notifications: domain rules plus the application services and the Expo sender (internals visible to the tests). -->
+    <ProjectReference Include="../../src/Services/Notifications/TrailHub.Notifications.Domain/TrailHub.Notifications.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Notifications/TrailHub.Notifications.Application/TrailHub.Notifications.Application.csproj" />
+    <ProjectReference Include="../../src/Services/Notifications/TrailHub.Notifications.Infrastructure/TrailHub.Notifications.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

@@ -145,8 +145,15 @@ call DELETE "/api/groups/$GROUP/locations/mine" "$A" >/dev/null
 call GET "/api/groups/$GROUP/locations" "$A" >/dev/null && ok "live locations endpoint" || fail "live locations endpoint"
 
 step "Weather (Open-Meteo, cached in Redis)"
-W=$(call GET "/api/weather?lat=49.25&lon=19.95&elevation=1350" "$A")
-echo "$W" | json 'f"now {d.current.temperatureC}°C {d.currentCondition}; {len(d.daily)} days; day 1 = {d.daily[0].assessment.suitability}"' | sed 's/^/  · /'
-ok "forecast with hiking assessment"
+# Open-Meteo is a third party that sometimes rate-limits shared CI addresses; then the API must answer 503, not 500.
+WSTATUS=$(curl -s -o "${TMPDIR:-/tmp}/trailhub-weather.json" -w '%{http_code}' "$BASE/api/weather?lat=49.25&lon=19.95&elevation=1350" -H "$A")
+if [[ $WSTATUS == 200 ]]; then
+  json 'f"now {d.current.temperatureC}°C {d.currentCondition}; {len(d.daily)} days; day 1 = {d.daily[0].assessment.suitability}"' < "${TMPDIR:-/tmp}/trailhub-weather.json" | sed 's/^/  · /'
+  ok "forecast with hiking assessment"
+elif [[ $WSTATUS == 503 ]] && grep -q 'Forecast.Unavailable' "${TMPDIR:-/tmp}/trailhub-weather.json"; then
+  ok "Open-Meteo unavailable: answered 503 Forecast.Unavailable (not a failure of ours)"
+else
+  fail "GET /api/weather → $WSTATUS: $(cat "${TMPDIR:-/tmp}/trailhub-weather.json")"
+fi
 
 printf '\n\033[32m%d checks passed\033[0m\n' "$pass"

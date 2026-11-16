@@ -11,7 +11,7 @@ namespace TrailHub.ArchitectureTests;
 /// </summary>
 public sealed class LayeringRuleTests
 {
-    private static readonly string[] ServiceNames = ["Profile", "Trails", "Activity", "Trips", "Groups", "Routes", "Weather"];
+    private static readonly string[] ServiceNames = ["Profile", "Trails", "Activity", "Trips", "Groups", "Routes", "Weather", "Notifications"];
 
     private static readonly string[] SharedAssemblies =
     [

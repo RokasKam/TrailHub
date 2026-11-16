@@ -5,6 +5,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useUnits } from '@/api/profile';
 import { type TrailFilters, useFavoriteTrails, useImportTrailGpx, useTrailSearch } from '@/api/trails';
+import { HeaderActions, NotificationBell } from '@/components/notification-bell';
 import { ThemedText } from '@/components/themed-text';
 import { TrailCard } from '@/components/trail-card';
 import { TrailMap } from '@/components/trail-map';
@@ -89,7 +90,16 @@ export default function DiscoverScreen() {
 
   return (
     <Screen tabBar>
-      <PageHeader eyebrow={greeting()} title="Discover" action={<IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickImport} />} />
+      <PageHeader
+        eyebrow={greeting()}
+        title="Discover"
+        action={
+          <HeaderActions>
+            <IconButton icon="square.and.arrow.down" label="Import GPX" onPress={pickImport} />
+            <NotificationBell />
+          </HeaderActions>
+        }
+      />
       {importing && <ImportTrailCard file={importing} onDone={() => setImporting(null)} />}
 
       <Input icon="magnifyingglass" placeholder="Trails, peaks or regions" value={query} onChangeText={setQuery} returnKeyType="search" clearButtonMode="while-editing" />

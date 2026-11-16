@@ -15,5 +15,6 @@ public static class DependencyInjection
             .AddScoped<IGearSuggestionService, GearSuggestionService>()
             .AddScoped<IGroupMembershipService, GroupMembershipService>()
             .AddScoped<ITripExpenseService, TripExpenseService>()
-            .AddScoped<IExchangeRateService, ExchangeRateService>();
+            .AddScoped<IExchangeRateService, ExchangeRateService>()
+            .AddScoped<IGearReminderService, GearReminderService>();
 }

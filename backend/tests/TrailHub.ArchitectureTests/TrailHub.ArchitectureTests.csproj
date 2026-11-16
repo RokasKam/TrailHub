@@ -15,6 +15,7 @@
     <ProjectReference Include="../../src/Services/Groups/TrailHub.Groups.Api/TrailHub.Groups.Api.csproj" />
     <ProjectReference Include="../../src/Services/Routes/TrailHub.Routes.Api/TrailHub.Routes.Api.csproj" />
     <ProjectReference Include="../../src/Services/Weather/TrailHub.Weather.Api/TrailHub.Weather.Api.csproj" />
+    <ProjectReference Include="../../src/Services/Notifications/TrailHub.Notifications.Api/TrailHub.Notifications.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

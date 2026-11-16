@@ -472,3 +472,20 @@ export type GearItem = { text: string; kind: ChecklistItemKind };
 export type GearList = { id: string; name: string; items: GearItem[]; isStarter: boolean; updatedAtUtc: string | null };
 export type GearSuggestion = GearItem & { reason: string };
 export type GearFacts = { tentNights?: number; hutNights?: number; hotelNights?: number; maxElevationMeters?: number | null; longestDayMinutes?: number | null };
+
+/** Push switches gate pushes only; the inbox records every category. */
+export type NotificationCategory = 'LikesComments' | 'Group' | 'Trips';
+/** One inbox item. `targetUrl` is an app path such as `/feed/{id}`, `/trips/{id}/expenses` or `/groups/{id}`. */
+export type AppNotification = {
+  id: string;
+  category: NotificationCategory;
+  kind: string;
+  title: string;
+  body: string;
+  targetUrl: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  read: boolean;
+};
+export type NotificationPreferences = { likesComments: boolean; group: boolean; trips: boolean };
+export type PushPlatform = 'ios' | 'android';

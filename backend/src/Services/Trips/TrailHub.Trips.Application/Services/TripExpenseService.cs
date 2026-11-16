@@ -1,5 +1,6 @@
 using TrailHub.BuildingBlocks.Application;
 using TrailHub.BuildingBlocks.Application.Exceptions;
+using TrailHub.Contracts;
 using TrailHub.Trips.Application.Interfaces.Providers;
 using TrailHub.Trips.Application.Interfaces.Repository;
 using TrailHub.Trips.Application.Interfaces.Service;
@@ -18,6 +19,7 @@ internal sealed class TripExpenseService(
     IExchangeRateService exchangeRates,
     IUnitOfWork unitOfWork,
     ITripChangeNotifier notifier,
+    IEventPublisher events,
     ICurrentUser user,
     TimeProvider clock) : ITripExpenseService
 {
@@ -62,6 +64,17 @@ internal sealed class TripExpenseService(
         var expense = TripExpense.Create(trip.Id, user.UserId, ToDetails(request), Context(trip, people.Current), Now()).GetValueOrThrow();
         expenses.Add(expense);
         await SaveAsync(trip.Id, cancellationToken);
+        await events.PublishAsync(
+            new TripExpenseAddedIntegrationEvent(
+                trip.Id,
+                trip.Name,
+                expense.Id,
+                expense.Description,
+                user.UserId,
+                people.NameOf(user.UserId),
+                trip.Currency,
+                expense.Shares.Select(s => new TripExpenseShare(s.UserId, s.Amount)).ToList()),
+            cancellationToken);
         return expense.ToResponse(people, user.UserId, trip.OwnerId);
     }
 
@@ -109,6 +122,19 @@ internal sealed class TripExpenseService(
             .GetValueOrThrow();
         payments.Add(payment);
         await SaveAsync(trip.Id, cancellationToken);
+        await events.PublishAsync(
+            new TripPaymentRecordedIntegrationEvent(
+                trip.Id,
+                trip.Name,
+                payment.Id,
+                payment.From,
+                people.NameOf(payment.From),
+                payment.To,
+                people.NameOf(payment.To),
+                payment.Amount,
+                trip.Currency,
+                user.UserId),
+            cancellationToken);
         return payment.ToResponse(people, user.UserId, trip.OwnerId);
     }
 

@@ -11,6 +11,9 @@ public interface ITripRepository
 
     Task<IReadOnlyList<Trip>> GetByGroupAsync(Guid groupId, CancellationToken cancellationToken);
 
+    /// <summary>Planned group trips starting on <paramref name="startDate"/> that haven't had a gear reminder.</summary>
+    Task<IReadOnlyList<Trip>> GetGearReminderCandidatesAsync(DateOnly startDate, CancellationToken cancellationToken);
+
     void Add(Trip trip);
 
     void Remove(Trip trip);

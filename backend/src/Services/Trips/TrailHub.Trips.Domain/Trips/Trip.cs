@@ -14,6 +14,7 @@ public sealed class Trip : AggregateRoot<Guid>
     public const int MaxTextLength = 4000;
     public const int MaxDays = 30;
     public const int MaxChecklistItems = 200;
+    public const int GearReminderDaysBefore = 2;
 
     private readonly List<TripDay> _days = [];
     private readonly List<ChecklistItem> _checklist = [];
@@ -44,6 +45,9 @@ public sealed class Trip : AggregateRoot<Guid>
 
     /// <summary>The currency expenses are converted to and balances are kept in (ISO 4217).</summary>
     public string Currency { get; private set; } = CurrencyCode.Default;
+
+    /// <summary>When members were reminded about unclaimed group gear (two days before the start); at most once per trip.</summary>
+    public DateTime? GearReminderSentAtUtc { get; private set; }
 
     public IReadOnlyList<TripDay> Days => _days;
 
@@ -379,6 +383,22 @@ public sealed class Trip : AggregateRoot<Guid>
         _checklist.Remove(item);
         return Result.Success();
     }
+
+    /// <summary>Group gear nobody has said they'll bring yet.</summary>
+    public int UnclaimedGroupItemCount => _checklist.Count(i => i.Kind == ChecklistItemKind.Shared && i.ClaimedBy is null);
+
+    /// <summary>
+    /// Whether to remind the group about unclaimed gear today: a planned group trip that starts in exactly
+    /// <see cref="GearReminderDaysBefore"/> days, with unclaimed group items, not reminded before.
+    /// </summary>
+    public bool NeedsGearReminder(DateOnly today) =>
+        Status == TripStatus.Planned
+        && GroupId is not null
+        && GearReminderSentAtUtc is null
+        && StartDate.DayNumber - today.DayNumber == GearReminderDaysBefore
+        && UnclaimedGroupItemCount > 0;
+
+    public void MarkGearReminderSent(DateTime nowUtc) => GearReminderSentAtUtc = nowUtc;
 
     public bool CanRemoveChecklistItem(string actorId, ChecklistItem item) => actorId == OwnerId || actorId == item.AddedBy;
 

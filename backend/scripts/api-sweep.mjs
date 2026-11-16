@@ -78,7 +78,10 @@ expect('achievements', await call('GET', '/api/profiles/me/achievements', {}, a)
 
 // ── Weather ────────────────────────────────────────────────────────────────────────────────────────────────
 console.log('Weather');
-expect('forecast', await call('GET', '/api/weather?lat=45.92&lon=6.87&elevation=1500', {}, a), 200, (f) => Array.isArray(f.daily) && f.daily.length > 0);
+// Open-Meteo rate-limits shared CI runners; an outage is a 503 Forecast.Unavailable problem rather than a failure here.
+const forecast = await call('GET', '/api/weather?lat=45.92&lon=6.87&elevation=1500', {}, a);
+if (forecast.status === 503) expectProblem('forecast (provider unavailable)', forecast, 503, 'Forecast.Unavailable');
+else expect('forecast', forecast, 200, (f) => Array.isArray(f.daily) && f.daily.length > 0);
 expectProblem('latitude out of range', await call('GET', '/api/weather?lat=95&lon=6.87', {}, a), 400);
 
 // ── Trails ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -312,6 +315,24 @@ const trip2 = (await call('POST', '/api/trips', {}, a, { name: 'Sweep trip to ca
 expect('cancel', await call('POST', '/api/trips/{id}/cancel', { id: trip2?.id }, a), 200, (t) => t.status === 'Cancelled');
 expect('delete gear lists', await call('DELETE', '/api/trips/gear-lists/{id}', { id: savedList?.id }, a), 204);
 
+// ── Notifications ──────────────────────────────────────────────────────────────────────────────────────────
+console.log('Notifications');
+expect('preferences (defaults)', await call('GET', '/api/notifications/preferences', {}, b), 200, (p) => p.likesComments && p.group && p.trips);
+expect('update preferences', await call('PUT', '/api/notifications/preferences', {}, b, { likesComments: false, group: true, trips: true }), 200, (p) => !p.likesComments && p.group);
+const pushToken = `ExponentPushToken[sweep-${stamp}]`;
+expect('register device', await call('PUT', '/api/notifications/devices', {}, b, { token: pushToken, platform: 'android' }), 204);
+expectProblem('register device with a bad platform', await call('PUT', '/api/notifications/devices', {}, b, { token: pushToken, platform: 'pager' }), 400, 'Notification.InvalidDevice');
+// Earlier steps (b joined a's group, a scheduled a hike and added an expense b shares) leave items in b's inbox.
+const notes = await eventually(() => call('GET', '/api/notifications?page=1&pageSize=50', {}, b), (r) => r.body?.items?.length > 0);
+expect('notifications', notes, 200, (r) => Array.isArray(r.items) && r.items.length > 0 && r.items.every((n) => n.id && n.kind && n.category && n.title && n.targetUrl && typeof n.read === 'boolean'));
+expect('unread count', await call('GET', '/api/notifications/unread-count', {}, b), 200, (r) => typeof r.count === 'number');
+const note = notes.body?.items?.[0];
+expect('mark read', await call('POST', '/api/notifications/{id}/read', { id: note?.id ?? missing }, b), 204);
+expectProblem("mark someone else's read", await call('POST', '/api/notifications/{id}/read', { id: note?.id ?? missing }, outsider), 404, 'Notification.NotFound');
+expect('mark all read', await call('POST', '/api/notifications/read-all', {}, b), 204);
+expect('nothing unread', await call('GET', '/api/notifications/unread-count', {}, b), 200, (r) => r.count === 0);
+expect('unregister device', await call('DELETE', '/api/notifications/devices/{token}', { token: pushToken }, b), 204);
+
 // ── Clean up and wrap up groups/routes/trips ─────────────────────────────────────────────────────────────────
 console.log('Clean up');
 expect('delete trip', await call('DELETE', '/api/trips/{id}', tp, a), 204);
@@ -330,7 +351,7 @@ expect('no token → 401', { status: (await fetch(`${base}/api/trips`)).status, 
 
 // ── Coverage: every operation in the OpenAPI documents should have been called ──────────────────────────────
 const operations = [];
-for (const service of ['profile', 'trails', 'activity', 'trips', 'groups', 'routes', 'weather']) {
+for (const service of ['profile', 'trails', 'activity', 'trips', 'groups', 'routes', 'weather', 'notifications']) {
   const doc = await (await fetch(`${base}/openapi/${service}.json`)).json();
   for (const [path, ops] of Object.entries(doc.paths)) for (const method of Object.keys(ops)) operations.push(`${method.toUpperCase()} ${path}`);
 }

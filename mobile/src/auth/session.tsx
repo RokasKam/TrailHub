@@ -7,6 +7,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { config } from '@/config';
 import { setAuthHeaderProvider } from '@/lib/api';
 import { queryClient } from '@/lib/query-client';
+import { unregisterForPush } from '@/notifications/push';
 
 export type Session = {
   status: 'loading' | 'signedOut' | 'signedIn';
@@ -74,6 +75,7 @@ function Auth0Session({ children }: PropsWithChildren) {
         );
       },
       signOut: async () => {
+        await unregisterForPush(); // first, while the token still authenticates the DELETE
         await clearSession({}, { customScheme: config.auth0.customScheme });
         queryClient.clear();
       },
@@ -113,6 +115,7 @@ function DevelopmentSession({ children }: PropsWithChildren) {
       user: userId ? { id: userId, name: userId } : null,
       signIn: async (options) => setUserId((options?.name || 'dev-hiker').trim().toLowerCase().replace(/\s+/g, '-')),
       signOut: async () => {
+        await unregisterForPush();
         setUserId(null);
         queryClient.clear();
       },

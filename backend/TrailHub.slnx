@@ -23,6 +23,12 @@
     <Project Path="src/Services/Groups/TrailHub.Groups.Domain/TrailHub.Groups.Domain.csproj" />
     <Project Path="src/Services/Groups/TrailHub.Groups.Infrastructure/TrailHub.Groups.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Notifications/">
+    <Project Path="src/Services/Notifications/TrailHub.Notifications.Api/TrailHub.Notifications.Api.csproj" />
+    <Project Path="src/Services/Notifications/TrailHub.Notifications.Application/TrailHub.Notifications.Application.csproj" />
+    <Project Path="src/Services/Notifications/TrailHub.Notifications.Domain/TrailHub.Notifications.Domain.csproj" />
+    <Project Path="src/Services/Notifications/TrailHub.Notifications.Infrastructure/TrailHub.Notifications.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Profile/">
     <Project Path="src/Services/Profile/TrailHub.Profile.Api/TrailHub.Profile.Api.csproj" />
     <Project Path="src/Services/Profile/TrailHub.Profile.Application/TrailHub.Profile.Application.csproj" />

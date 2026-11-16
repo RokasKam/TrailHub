@@ -74,6 +74,8 @@ jobs:
           sed -i 's/^AUTH_MODE=.*/AUTH_MODE=Development/' .env
           echo "MODERATOR_USER_ID=moderation-mod" >> .env
           echo "MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN}" >> .env
+          # Notifications only log pushes in CI; nothing is sent to Expo.
+          sed -i 's/^PUSH_ENABLED=.*/PUSH_ENABLED=false/' .env
       - name: Start the stack
         working-directory: backend
         run: docker compose up -d --build --wait --wait-timeout 600
@@ -102,6 +104,9 @@ jobs:
       - name: Trip expenses
         working-directory: backend
         run: node scripts/trip-expenses-test.mjs
+      - name: Notifications
+        working-directory: backend
+        run: node scripts/notifications-test.mjs
       - name: Hike feed
         working-directory: backend
         run: node scripts/hike-feed-test.mjs

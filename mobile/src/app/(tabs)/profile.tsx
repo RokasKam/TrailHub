@@ -2,8 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
 
-import { useAchievements, useProfile, useUpdatePreferences, useUpdateProfile } from '@/api/profile';
 import { useContentModerationQueue } from '@/api/feed';
+import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/api/notifications';
+import { useAchievements, useProfile, useUpdatePreferences, useUpdateProfile } from '@/api/profile';
 import { useModerationQueue, usePhotoModerationQueue } from '@/api/trails';
 import { useSession } from '@/auth/session';
 import { ThemedText } from '@/components/themed-text';
@@ -12,7 +13,8 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { describeError } from '@/lib/api';
 import { formatDistance, formatElevation } from '@/lib/format';
-import type { MapStyle, Preferences, Units } from '@/lib/types';
+import type { MapStyle, NotificationPreferences, Preferences, Units } from '@/lib/types';
+import { requestPushPermission, usePushPermission } from '@/notifications/push';
 
 export default function ProfileScreen() {
   const { signOut } = useSession();
@@ -173,19 +175,74 @@ export default function ProfileScreen() {
             title="Share location with groups"
             trailing={<Switch value={p.preferences.shareLocationWithGroups} onValueChange={(v) => setPreference({ shareLocationWithGroups: v })} trackColor={{ true: theme.accent }} />}
           />
-          <ListRow
-            icon="bell.fill"
-            iconColor="#DC2626"
-            title="Notifications"
-            trailing={<Switch value={p.preferences.notificationsEnabled} onValueChange={(v) => setPreference({ notificationsEnabled: v })} trackColor={{ true: theme.accent }} />}
-          />
         </List>
       </Section>
+
+      <NotificationSettings />
 
       <List>
         <ListRow title="Sign out" destructive onPress={signOut} />
       </List>
     </Screen>
+  );
+}
+
+/** Push switches per category. The inbox records everything regardless; these only decide what pushes. */
+function NotificationSettings() {
+  const theme = useTheme();
+  const prefs = useNotificationPreferences();
+  const update = useUpdateNotificationPreferences();
+  const permission = usePushPermission((s) => s.status);
+  const current = prefs.data;
+
+  if (!current) {
+    return (
+      <Section title="Notifications">
+        <QueryState isLoading={prefs.isLoading} error={prefs.error} onRetry={() => prefs.refetch()} />
+      </Section>
+    );
+  }
+
+  const set = (change: Partial<NotificationPreferences>) => {
+    update.mutate({ ...current, ...change });
+    // Turning a category on is the moment to ask for push permission (explanation first, or Settings if blocked).
+    if (Object.values(change).some(Boolean) && permission !== 'granted') void requestPushPermission();
+  };
+  const toggle = (value: boolean, onChange: (v: boolean) => void) => (
+    <Switch value={value} onValueChange={onChange} trackColor={{ true: theme.accent }} />
+  );
+
+  return (
+    <Section title="Notifications">
+      <List>
+        <ListRow
+          icon="heart.fill"
+          iconColor="#E11D48"
+          title="Likes & comments"
+          detail="On hikes you share"
+          trailing={toggle(current.likesComments, (v) => set({ likesComments: v }))}
+        />
+        <ListRow
+          icon="person.3.fill"
+          iconColor="#2563EB"
+          title="Group activity"
+          detail="Group hikes, new members, shared hikes"
+          trailing={toggle(current.group, (v) => set({ group: v }))}
+        />
+        <ListRow
+          icon="banknote.fill"
+          iconColor="#EA580C"
+          title="Trips & expenses"
+          detail="Expenses, payments, unclaimed gear"
+          trailing={toggle(current.trips, (v) => set({ trips: v }))}
+        />
+      </List>
+      {permission === 'blocked' && (
+        <ThemedText type="caption" themeColor="textSecondary">
+          Notifications are turned off for TrailHub in Settings, so nothing is pushed. Everything still shows in your inbox.
+        </ThemedText>
+      )}
+    </Section>
   );
 }
 

@@ -7,6 +7,7 @@ using TrailHub.BuildingBlocks.Infrastructure.Messaging;
 using TrailHub.BuildingBlocks.Infrastructure.Persistence;
 using TrailHub.Trips.Application.Interfaces.Providers;
 using TrailHub.Trips.Application.Interfaces.Repository;
+using TrailHub.Trips.Infrastructure.BackgroundJobs;
 using TrailHub.Trips.Infrastructure.Consumers;
 using TrailHub.Trips.Infrastructure.Groups;
 using TrailHub.Trips.Infrastructure.Persistence;
@@ -51,6 +52,7 @@ public static class DependencyInjection
         // parallel makes both insert the same group (a duplicate-key failure, then a retry that briefly leaves the
         // read model stale).
         services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<GroupMembersChangedConsumer>().Endpoint(e => e.ConcurrentMessageLimit = 1));
+        services.AddHostedService<GearReminderJob>();
         services.AddHealthChecks().AddDbContextCheck<TripsDbContext>("trips-db", tags: ["ready"]);
         return services;
     }
