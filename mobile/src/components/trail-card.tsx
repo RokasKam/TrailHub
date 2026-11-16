@@ -6,7 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge, Card, Glass, Icon } from '@/components/ui';
 import { config } from '@/config';
 import { Radius, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDistance, formatElevation, formatMinutes } from '@/lib/format';
 import type { Difficulty, LatLng, TrailSummary, Units } from '@/lib/types';
@@ -19,22 +18,22 @@ export const DIFFICULTY_COLORS: Record<Difficulty, string> = {
 };
 
 /** Static Mapbox image of the trailhead, cached by expo-image, so cards have a picture without loading a live map each. */
-export function trailheadImageUrl(start: LatLng, width = 600, height = 300, dark = false, zoom = 11.5) {
+/** Static terrain map of a trail's start. Same outdoors style in light and dark mode, like the interactive maps. */
+export function trailheadImageUrl(start: LatLng, width = 600, height = 300, zoom = 11.5) {
   const at = `${start.longitude.toFixed(5)},${start.latitude.toFixed(5)}`;
-  const style = dark ? 'dark-v11' : 'outdoors-v12';
+  const style = 'outdoors-v12';
   return `https://api.mapbox.com/styles/v1/mapbox/${style}/static/pin-s+1f7a4d(${at})/${at},${zoom},0/${width}x${height}@2x?access_token=${config.mapboxToken}`;
 }
 
 export function TrailCard({ trail, units, compact }: { trail: TrailSummary; units: Units; compact?: boolean }) {
   const theme = useTheme();
-  const dark = useColorScheme() === 'dark';
   return (
     <Link href={`/trail/${trail.id}`} asChild>
       <Pressable style={({ pressed }) => [compact && styles.compact, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}>
         <Card style={styles.card}>
           <View>
             <Image
-              source={{ uri: trailheadImageUrl(trail.start, compact ? 520 : 700, compact ? 300 : 320, dark) }}
+              source={{ uri: trailheadImageUrl(trail.start, compact ? 520 : 700, compact ? 300 : 320) }}
               style={[styles.image, compact && styles.imageCompact, { backgroundColor: theme.backgroundSelected }]}
               contentFit="cover"
               transition={200}

@@ -80,7 +80,7 @@ export default function ProfileScreen() {
         </Card>
       ) : (
         <View style={styles.header}>
-          <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
+          <View style={[styles.avatar, { backgroundColor: theme.accentFill }]}>
             <ThemedText type="headline" style={styles.avatarText}>
               {initials || '?'}
             </ThemedText>

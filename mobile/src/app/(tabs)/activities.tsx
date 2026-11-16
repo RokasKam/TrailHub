@@ -73,7 +73,7 @@ function MyHikes({ toggle }: { toggle: ReactNode }) {
 
       {stats.data && year && (
         <>
-          <Card style={[styles.hero, { backgroundColor: theme.accent }]}>
+          <Card style={[styles.hero, { backgroundColor: theme.accentFill }]}>
             <ThemedText type="caption" style={styles.heroLabel}>
               {new Date().getFullYear()} DISTANCE
             </ThemedText>

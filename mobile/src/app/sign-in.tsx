@@ -32,7 +32,7 @@ export default function SignInScreen() {
   return (
     <Screen scroll={false}>
       <View style={styles.hero}>
-        <View style={[styles.logo, { backgroundColor: theme.accent }]}>
+        <View style={[styles.logo, { backgroundColor: theme.accentFill }]}>
           <Icon name="mountain.2.fill" size={44} color="#fff" />
         </View>
         <ThemedText type="title">TrailHub</ThemedText>

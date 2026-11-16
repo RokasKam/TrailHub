@@ -67,8 +67,10 @@ export function Screen({ children, scroll = true, tabBar = false, refreshing = f
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   // iOS 26+ stack headers are translucent and content scrolls under them; start below the header, not just the status bar.
+  // Android's stack header is opaque and already pushes the page down, so only the status bar needs clearing there
+  // (and not even that under a header).
   const headerHeight = use(HeaderHeightContext) ?? 0;
-  const top = Math.max(insets.top, headerHeight);
+  const top = Platform.OS === 'ios' ? Math.max(insets.top, headerHeight) : headerHeight > 0 ? 0 : insets.top;
   const padding = { paddingTop: top + Spacing.three, paddingBottom: insets.bottom + (tabBar ? BottomTabInset : 0) + Spacing.five };
   const content = <View style={[styles.content, !scroll && padding]}>{children}</View>;
   return scroll ? (
@@ -76,6 +78,9 @@ export function Screen({ children, scroll = true, tabBar = false, refreshing = f
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={[styles.scroll, padding]}
       keyboardShouldPersistTaps="handled"
+      // Safe areas are padded above by hand; without this iOS sometimes adds them again (e.g. the first tab), leaving
+      // a gap under the status bar.
+      contentInsetAdjustmentBehavior="never"
       automaticallyAdjustKeyboardInsets // keeps the focused field above the keyboard (iOS)
       keyboardDismissMode="interactive"
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} progressViewOffset={top} tintColor={theme.textSecondary} colors={[theme.accent]} /> : undefined}
@@ -143,7 +148,7 @@ type ButtonProps = {
 
 export function Button({ label, onPress, variant = 'primary', icon, disabled, loading, size = 'regular' }: ButtonProps) {
   const theme = useTheme();
-  const background = { primary: theme.accent, secondary: theme.backgroundSelected, tinted: theme.accentSoft, danger: theme.dangerSoft }[variant];
+  const background = { primary: theme.accentFill, secondary: theme.backgroundSelected, tinted: theme.accentSoft, danger: theme.dangerSoft }[variant];
   const color = { primary: '#fff', secondary: theme.text, tinted: theme.accent, danger: theme.danger }[variant];
   return (
     <Pressable
@@ -170,7 +175,7 @@ export function IconButton({ icon, onPress, label, color, tinted }: { icon: AppI
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.92 : 1 }] })}>
-      <View style={[styles.iconButton, { backgroundColor: tinted ? theme.accent : theme.backgroundElement }, styles.raised]}>
+      <View style={[styles.iconButton, { backgroundColor: tinted ? theme.accentFill : theme.backgroundElement }, styles.raised]}>
         <Icon name={icon} color={color ?? (tinted ? '#fff' : theme.text)} size={18} />
       </View>
     </Pressable>

@@ -5,10 +5,11 @@ import '@/location/tracking';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 import { SessionProvider, useSession } from '@/auth/session';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { Colors } from '@/constants/theme';
 import { persistOptions, queryClient } from '@/lib/query-client';
 import { useSyncStore } from '@/stores/sync-store';
 
@@ -34,11 +35,23 @@ export default function RootLayout() {
 
 function RootStack() {
   const { status } = useSession();
+  const colors = Colors[useColorScheme() === 'dark' ? 'dark' : 'light'];
   if (status === 'loading') return null;
 
   const signedIn = status === 'signedIn';
   return (
-    <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
+    <Stack
+      screenOptions={{
+        headerBackButtonDisplayMode: 'minimal',
+        // Android's Material header is opaque: give it the page colour and no shadow so it reads as part of the page,
+        // like iOS's translucent header. iOS keeps the system (Liquid Glass) look.
+        ...(Platform.OS === 'android' && {
+          headerStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: '600' },
+        }),
+      }}>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="trail/[id]" options={{ title: '' }} />

@@ -9,6 +9,10 @@ import { type AppIcon, ICONS } from '@/lib/icons';
 const icon = (name: AppIcon) =>
   Platform.OS === 'ios' ? { sf: name } : { src: unstable_getMaterialSymbolSourceAsync(ICONS[name], 24, '#000') };
 
+// iOS: the app pads screens for the status bar and tab bar itself (see Screen), so the system mustn't add its own
+// insets to a tab's first scroll view too; that left an empty band above Discover.
+const manualInsets = Platform.OS === 'ios';
+
 export default function TabsLayout() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
@@ -21,23 +25,23 @@ export default function TabsLayout() {
       indicatorColor={colors.accentSoft}
       labelVisibilityMode="labeled" // Android: label every tab, like iOS (the default shows only the selected one)
       labelStyle={{ selected: { color: colors.accent } }}>
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="index" disableAutomaticContentInsets={manualInsets}>
         <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('map.fill')} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="plan">
+      <NativeTabs.Trigger name="plan" disableAutomaticContentInsets={manualInsets}>
         <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('point.topleft.down.to.point.bottomright.curvepath.fill')} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="record">
+      <NativeTabs.Trigger name="record" disableAutomaticContentInsets={manualInsets}>
         <NativeTabs.Trigger.Label>Record</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('record.circle.fill')} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="activities">
+      <NativeTabs.Trigger name="activities" disableAutomaticContentInsets={manualInsets}>
         <NativeTabs.Trigger.Label>Hikes</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('figure.hiking')} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
+      <NativeTabs.Trigger name="profile" disableAutomaticContentInsets={manualInsets}>
         <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon {...icon('person.crop.circle.fill')} />
       </NativeTabs.Trigger>

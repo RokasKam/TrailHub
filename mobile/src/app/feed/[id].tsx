@@ -249,7 +249,7 @@ function Composer({ postId }: { postId: string }) {
         accessibilityLabel="Post comment"
         disabled={!trimmed || add.isPending}
         onPress={send}
-        style={({ pressed }) => [styles.send, { backgroundColor: theme.accent, opacity: !trimmed ? 0.4 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] }]}>
+        style={({ pressed }) => [styles.send, { backgroundColor: theme.accentFill, opacity: !trimmed ? 0.4 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] }]}>
         {add.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="paperplane.fill" size={16} color="#fff" />}
       </Pressable>
     </View>

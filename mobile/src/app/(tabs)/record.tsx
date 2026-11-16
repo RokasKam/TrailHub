@@ -119,7 +119,7 @@ export default function RecordScreen() {
         <Card style={styles.idle}>
           <Pressable accessibilityRole="button" accessibilityLabel="Start recording" onPress={begin} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.95 : 1 }] })}>
             <View style={[styles.startRing, { borderColor: theme.accentSoft }]}>
-              <View style={[styles.start, { backgroundColor: theme.accent }]}>
+              <View style={[styles.start, { backgroundColor: theme.accentFill }]}>
                 <Icon name="figure.hiking" size={44} color="#fff" />
                 <ThemedText type="headline" style={{ color: '#fff' }}>
                   Start
@@ -189,7 +189,7 @@ export default function RecordScreen() {
                 icon={status === 'recording' ? 'pause.fill' : 'play.fill'}
                 label={status === 'recording' ? 'Pause' : 'Resume'}
                 size={84}
-                background={status === 'recording' ? theme.text : theme.accent}
+                background={status === 'recording' ? theme.text : theme.accentFill}
                 color={status === 'recording' ? theme.background : '#fff'}
                 onPress={togglePause}
               />

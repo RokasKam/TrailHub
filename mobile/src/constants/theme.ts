@@ -17,6 +17,8 @@ export const Colors = {
     textSecondary: '#6E716B',
     separator: 'rgba(21,24,26,0.08)',
     accent: '#1F7A4D',
+    /** Filled surfaces with white content (buttons, the record button, hero cards). */
+    accentFill: '#1F7A4D',
     accentSoft: '#E1F0E6',
     danger: '#C2410C',
     dangerSoft: '#FBE7DD',
@@ -29,6 +31,8 @@ export const Colors = {
     textSecondary: '#9DA29B',
     separator: 'rgba(255,255,255,0.08)',
     accent: '#41C07E',
+    // The bright dark-mode accent reads well as text but not under white text; fills use a deeper green.
+    accentFill: '#1E7D4E',
     accentSoft: '#173726',
     danger: '#F2734A',
     dangerSoft: '#3A1D12',
