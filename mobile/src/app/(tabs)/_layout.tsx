@@ -19,6 +19,7 @@ export default function TabsLayout() {
       tintColor={colors.accent}
       backgroundColor={Platform.OS === 'android' ? colors.backgroundElement : undefined}
       indicatorColor={colors.accentSoft}
+      labelVisibilityMode="labeled" // Android: label every tab, like iOS (the default shows only the selected one)
       labelStyle={{ selected: { color: colors.accent } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>

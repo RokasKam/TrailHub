@@ -1,5 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as Location from 'expo-location';
 import { Alert, Share, StyleSheet, View } from 'react-native';
 
 import { useGroupLiveLocation } from '@/api/live-location';
@@ -30,6 +31,18 @@ export default function GroupScreen() {
   const allowSharing = useProfile().data?.preferences.shareLocationWithGroups ?? false;
   const sharing = useGroupSharingStore((s) => s.groupIds.includes(id));
   const [busy, setBusy] = useState(false);
+  // Whether sharing keeps going with the screen off ("Always" / "Allow all the time"); re-checked when this screen mounts.
+  const [backgroundPermission, , readBackgroundPermission] = Location.useBackgroundPermissions();
+  const background = backgroundPermission?.granted ?? false;
+
+  // Someone who joined after the group was loaded can start sharing before the member list refreshes; reload it so
+  // their marker shows their name instead of "Member".
+  const memberIds = new Set(group.data?.members.map((m) => m.userId) ?? []);
+  const unknownSharer = group.data != null && (locations.data ?? []).some((l) => !memberIds.has(l.userId));
+  const refetchGroup = group.refetch;
+  useEffect(() => {
+    if (unknownSharer) void refetchGroup();
+  }, [unknownSharer, refetchGroup]);
 
   if (!group.data) return <Screen><QueryState isLoading={group.isLoading} error={group.error} /></Screen>;
   const g = group.data;
@@ -49,6 +62,7 @@ export default function GroupScreen() {
       if (!allowSharing) return Alert.alert('Location sharing is off', 'Turn on "Share my location with groups" in Profile → Preferences.');
       const result = await startGroupSharing(id);
       if (!result.ok) return Alert.alert('Location needed', 'Allow location access to share where you are with your group.');
+      void readBackgroundPermission(); // startGroupSharing already asked; just re-read the answer
       if (!result.background) Alert.alert('Sharing while the app is open', 'Allow "Always" location access in Settings to keep sharing with the screen off.');
     } catch (e) {
       Alert.alert('Location unavailable', (e as Error).message);
@@ -58,7 +72,13 @@ export default function GroupScreen() {
   };
 
   return (
-    <Screen>
+    <Screen
+      refreshing={group.isRefetching}
+      onRefresh={() => {
+        void group.refetch();
+        void locations.refetch();
+        void trips.refetch();
+      }}>
       <Stack.Screen options={{ title: '' }} />
       <ThemedText type="subtitle">{g.name}</ThemedText>
 
@@ -67,6 +87,8 @@ export default function GroupScreen() {
         action={<Badge label={live.state === 'Connected' ? 'Live' : live.state} color={live.state === 'Connected' ? '#16A34A' : '#9CA3AF'} icon="dot.radiowaves.left.and.right" />}>
         <TrailMap
           showUser
+          // Nobody else to show: follow my own position instead of opening on an empty ocean at 0,0.
+          followUser={!others[0] && !meetingPins[0]}
           center={others[0] ?? meetingPins[0]}
           zoom={13}
           markers={[
@@ -76,7 +98,7 @@ export default function GroupScreen() {
         />
         <ThemedText type="small" themeColor="textSecondary">
           {others.length === 0 ? 'Nobody else is sharing right now.' : `${others.length} member${others.length > 1 ? 's' : ''} sharing`}
-          {sharing ? ' · You are sharing (also in the background)' : ''}
+          {sharing ? (background ? ' · You are sharing (also with the screen off)' : ' · You are sharing while the app is open') : ''}
         </ThemedText>
         <Button
           icon={sharing ? 'location.slash.fill' : 'location.fill'}

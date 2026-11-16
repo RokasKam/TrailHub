@@ -342,28 +342,31 @@ function BalanceRow({ balance: b, currency }: { balance: Balance; currency: stri
 function SuggestionRow({ suggestion: s, currency, myId, busy, onMarkPaid }: { suggestion: SettlementSuggestion; currency: string; myId?: string; busy: boolean; onMarkPaid: () => void }) {
   const theme = useTheme();
   const involvesMe = s.from.userId === myId || s.to.userId === myId;
+  // Names get the full width on their own lines (emails are long); amount and action share the line below.
   return (
-    <View style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <View style={styles.inline}>
-          <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {nameOf(s.from, myId)}
-          </ThemedText>
-          <Icon name="arrow.right" size={12} color={theme.textSecondary} />
-          <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {nameOf(s.to, myId)}
-          </ThemedText>
-        </View>
-        {involvesMe && (
-          <ThemedText type="caption" style={{ color: s.from.userId === myId ? theme.danger : theme.accent }}>
-            {s.from.userId === myId ? 'You pay' : 'You get paid'}
-          </ThemedText>
-        )}
+    <View style={{ gap: Spacing.two }}>
+      <View style={styles.inline}>
+        <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {nameOf(s.from, myId)}
+        </ThemedText>
+        <Icon name="arrow.right" size={12} color={theme.textSecondary} />
+        <ThemedText type="smallBold" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {nameOf(s.to, myId)}
+        </ThemedText>
       </View>
-      <ThemedText type="smallBold" style={[styles.num, { color: s.from.userId === myId ? theme.danger : s.to.userId === myId ? theme.accent : theme.text }]}>
-        {formatMoney(s.amount, currency)}
-      </ThemedText>
-      <Button size="small" variant="tinted" icon="checkmark" label="Mark paid" disabled={busy} onPress={onMarkPaid} />
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <ThemedText type="smallBold" style={[styles.num, { textAlign: 'left', color: s.from.userId === myId ? theme.danger : s.to.userId === myId ? theme.accent : theme.text }]}>
+            {formatMoney(s.amount, currency)}
+          </ThemedText>
+          {involvesMe && (
+            <ThemedText type="caption" style={{ color: s.from.userId === myId ? theme.danger : theme.accent }}>
+              {s.from.userId === myId ? 'You pay' : 'You get paid'}
+            </ThemedText>
+          )}
+        </View>
+        <Button size="small" variant="tinted" icon="checkmark" label="Mark paid" disabled={busy} onPress={onMarkPaid} />
+      </View>
     </View>
   );
 }
