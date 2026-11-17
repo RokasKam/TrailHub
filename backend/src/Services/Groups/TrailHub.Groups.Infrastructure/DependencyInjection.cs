@@ -7,6 +7,7 @@ using TrailHub.BuildingBlocks.Infrastructure.Persistence;
 using TrailHub.Groups.Application.Interfaces.Providers;
 using TrailHub.Groups.Application.Interfaces.Repository;
 using TrailHub.Groups.Infrastructure.BackgroundJobs;
+using TrailHub.Groups.Infrastructure.Consumers;
 using TrailHub.Groups.Infrastructure.LiveLocations;
 using TrailHub.Groups.Infrastructure.Repositories;
 
@@ -37,7 +38,9 @@ public static class DependencyInjection
             services.AddDistributedMemoryCache();
         }
 
-        services.AddTrailHubMessaging(configuration);
+        // One rename at a time: two renames (or a rename and a join) saving the same group at once would fail on its row
+        // version and wait for a retry.
+        services.AddTrailHubMessaging(configuration, bus => bus.AddConsumer<ProfileRenamedConsumer>().Endpoint(e => e.ConcurrentMessageLimit = 1));
         services.AddHostedService<GroupMembersResync>();
         services.AddHealthChecks().AddDbContextCheck<GroupsDbContext>("groups-db", tags: ["ready"]);
         return services;

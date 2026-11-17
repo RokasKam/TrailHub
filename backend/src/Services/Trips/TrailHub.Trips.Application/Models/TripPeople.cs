@@ -1,3 +1,4 @@
+using TrailHub.BuildingBlocks.Domain;
 using TrailHub.Trips.Domain.Expenses;
 using TrailHub.Trips.Domain.Trips;
 
@@ -5,7 +6,8 @@ namespace TrailHub.Trips.Application.Models;
 
 /// <summary>
 /// Who takes part in a trip's expenses and what to call everyone in its ledger. Participants are the owner plus, for a
-/// group trip, the group's current members. People who left keep the name they last had in the ledger.
+/// group trip, the group's current members, named as the group knows them now. People who left keep the name they
+/// last had in the ledger (made readable if it was an email, as names were before they were made readable).
 /// </summary>
 public sealed class TripPeople
 {
@@ -24,7 +26,7 @@ public sealed class TripPeople
         {
             foreach (var (userId, name) in names)
             {
-                _known[userId] = name;
+                _known[userId] = DisplayNames.Friendly(name);
             }
         }
 

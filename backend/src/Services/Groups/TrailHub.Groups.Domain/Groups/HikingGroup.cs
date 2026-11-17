@@ -78,6 +78,35 @@ public sealed class HikingGroup : AggregateRoot<Guid>
         return Result.Success();
     }
 
+    /// <summary>
+    /// Gives a member their new profile name (never an email). Returns whether anything changed: false when they aren't a
+    /// member or already have that name.
+    /// </summary>
+    public bool RenameMember(string userId, string displayName)
+    {
+        var name = DisplayNames.Friendly(displayName);
+        if (_members.Find(m => m.UserId == userId) is not { } member || member.DisplayName == name)
+        {
+            return false;
+        }
+
+        member.DisplayName = name;
+        return true;
+    }
+
+    /// <summary>Makes member names that are emails (stored before names were made readable) readable. Returns whether any changed.</summary>
+    public bool FixEmailMemberNames()
+    {
+        var changed = false;
+        foreach (var member in _members.Where(m => DisplayNames.IsEmail(m.DisplayName)))
+        {
+            member.DisplayName = DisplayNames.Friendly(member.DisplayName);
+            changed = true;
+        }
+
+        return changed;
+    }
+
     /// <summary>The owner can only leave by handing the group over first (or deleting it).</summary>
     public Result Leave(string userId)
     {

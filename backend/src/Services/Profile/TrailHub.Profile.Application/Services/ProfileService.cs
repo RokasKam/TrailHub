@@ -8,7 +8,7 @@ using TrailHub.Profile.Domain.Profiles;
 
 namespace TrailHub.Profile.Application.Services;
 
-internal sealed class ProfileService(IProfileProvisioner provisioner, IUnitOfWork unitOfWork, ICurrentUser user) : IProfileService
+internal sealed class ProfileService(IProfileProvisioner provisioner, IUnitOfWork unitOfWork, IEventPublisher events, ICurrentUser user) : IProfileService
 {
     public async Task<ProfileResponse> GetMyProfileAsync(CancellationToken cancellationToken) =>
         (await provisioner.GetOrCreateAsync(user.UserId, user.Name, user.Email, cancellationToken)).ToResponse();
@@ -16,8 +16,14 @@ internal sealed class ProfileService(IProfileProvisioner provisioner, IUnitOfWor
     public async Task<ProfileResponse> UpdateMyProfileAsync(UpdateProfileRequest request, CancellationToken cancellationToken)
     {
         var profile = await provisioner.GetOrCreateAsync(user.UserId, request.DisplayName, user.Email, cancellationToken);
+        var previousName = profile.DisplayName;
         profile.UpdateDetails(request.DisplayName, request.Bio, request.HomeRegion, request.AvatarUrl).ThrowIfFailure();
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (profile.DisplayName != previousName)
+        {
+            await events.PublishRenamedAsync(profile, cancellationToken);
+        }
+
         return profile.ToResponse();
     }
 

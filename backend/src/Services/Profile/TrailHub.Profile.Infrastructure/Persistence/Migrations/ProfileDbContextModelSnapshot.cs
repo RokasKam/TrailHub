@@ -19,7 +19,7 @@ namespace TrailHub.Profile.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("profile")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -53,6 +53,9 @@ namespace TrailHub.Profile.Infrastructure.Persistence.Migrations
                     b.Property<string>("HomeRegion")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("NameConfirmed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("UserId")
                         .IsRequired()

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { feedKeys } from '@/api/feed';
+import { groupKeys, tripKeys } from '@/api/planning';
 import { api } from '@/lib/api';
 import type { Achievement, Preferences, Profile, Units } from '@/lib/types';
 
@@ -38,6 +40,13 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: (body: { displayName: string; bio?: string | null; homeRegion?: string | null; avatarUrl?: string | null }) =>
       api<Profile>('/api/profiles/me', { method: 'PUT', body }),
-    onSuccess: (profile) => qc.setQueryData(profileKeys.me, profile),
+    onSuccess: (profile) => {
+      qc.setQueryData(profileKeys.me, profile);
+      // Groups, the feed and trips show the name too. The server passes a new name on to them in the background
+      // (usually within a second or two), so reload them now and once more a little later.
+      const reload = () => [groupKeys.all, feedKeys.all, tripKeys.all].forEach((queryKey) => void qc.invalidateQueries({ queryKey }));
+      reload();
+      setTimeout(reload, 3000);
+    },
   });
 }

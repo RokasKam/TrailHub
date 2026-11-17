@@ -18,8 +18,11 @@ internal sealed class GroupRepository(GroupsDbContext db) : IGroupRepository
     public Task<bool> IsMemberAsync(Guid groupId, string userId, CancellationToken cancellationToken) =>
         db.Groups.AnyAsync(g => g.Id == groupId && g.Members.Any(m => m.UserId == userId), cancellationToken);
 
-    public async Task<IReadOnlyList<HikingGroup>> GetAllAsync(CancellationToken cancellationToken) =>
-        await db.Groups.AsNoTracking().ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<HikingGroup>> GetForMemberForUpdateAsync(string userId, CancellationToken cancellationToken) =>
+        await db.Groups.Where(g => g.Members.Any(m => m.UserId == userId)).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<HikingGroup>> GetAllForUpdateAsync(CancellationToken cancellationToken) =>
+        await db.Groups.ToListAsync(cancellationToken);
 
     public void Add(HikingGroup group) => db.Groups.Add(group);
 

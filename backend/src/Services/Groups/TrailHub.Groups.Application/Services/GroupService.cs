@@ -45,7 +45,7 @@ internal sealed class GroupService(
     public async Task<GroupResponse> CreateAsync(CreateGroupRequest request, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
-        var group = HikingGroup.Create(request.Name, request.Description, user.UserId, request.DisplayName ?? user.Name ?? "Hiker", InviteCodes.Generate(), now)
+        var group = HikingGroup.Create(request.Name, request.Description, user.UserId, MemberName(request.DisplayName), InviteCodes.Generate(), now)
             .GetValueOrThrow();
 
         groups.Add(group);
@@ -60,7 +60,7 @@ internal sealed class GroupService(
             ?? throw GroupErrors.InvalidInviteCode.ToException();
 
         var now = clock.GetUtcNow().UtcDateTime;
-        group.Join(user.UserId, request.DisplayName ?? user.Name ?? "Hiker", request.InviteCode.Trim(), now).ThrowIfFailure();
+        group.Join(user.UserId, MemberName(request.DisplayName), request.InviteCode.Trim(), now).ThrowIfFailure();
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await events.PublishMembersAsync(group, now, cancellationToken);
@@ -113,14 +113,55 @@ internal sealed class GroupService(
         await events.PublishMembersAsync(group, clock.GetUtcNow().UtcDateTime, cancellationToken, deleted: true);
     }
 
-    public async Task RepublishMembersAsync(CancellationToken cancellationToken)
+    public async Task RenameMemberAsync(string userId, string displayName, CancellationToken cancellationToken)
     {
+        var changed = new List<HikingGroup>();
+        foreach (var group in await groups.GetForMemberForUpdateAsync(userId, cancellationToken))
+        {
+            if (group.RenameMember(userId, displayName))
+            {
+                changed.Add(group);
+            }
+        }
+
+        if (changed.Count == 0)
+        {
+            return;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
-        foreach (var group in await groups.GetAllAsync(cancellationToken))
+        foreach (var group in changed)
         {
             await events.PublishMembersAsync(group, now, cancellationToken);
         }
     }
+
+    public async Task RepublishMembersAsync(CancellationToken cancellationToken)
+    {
+        var all = await groups.GetAllForUpdateAsync(cancellationToken);
+
+        // One-off cleanup: members who joined with their email as their name get a readable one before it's republished.
+        var anyFixed = false;
+        foreach (var group in all)
+        {
+            anyFixed |= group.FixEmailMemberNames();
+        }
+
+        if (anyFixed)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        foreach (var group in all)
+        {
+            await events.PublishMembersAsync(group, now, cancellationToken);
+        }
+    }
+
+    /// <summary>The name the caller joins with: the one the app sends (their profile name), never an email.</summary>
+    private string MemberName(string? requested) => DisplayNames.Friendly(requested ?? user.Name, user.Email);
 
     /// <summary>Shared shape for member/owner actions on an existing group: load, apply, save.</summary>
     private async Task<HikingGroup> UpdateAsync(Guid groupId, Func<HikingGroup, Result> action, CancellationToken cancellationToken)

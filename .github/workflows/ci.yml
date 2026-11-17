@@ -107,6 +107,9 @@ jobs:
       - name: Notifications
         working-directory: backend
         run: node scripts/notifications-test.mjs
+      - name: Readable names
+        working-directory: backend
+        run: node scripts/names-test.mjs
       - name: Hike feed
         working-directory: backend
         run: node scripts/hike-feed-test.mjs

@@ -168,11 +168,11 @@ sequenceDiagram
 
 | Service | Owns | Storage | Talks to |
 |---------|------|---------|----------|
-| **Profile** | Profile, preferences, hiking totals, achievements | Postgres | consumes hike events |
+| **Profile** | Profile, preferences, hiking totals, achievements | Postgres | consumes hike events; publishes renames |
 | **Trails** | Trails, GPX import/export, points of interest, elevation profiles, favourites, reviews, condition reports, trail photos, trail and photo moderation | Postgres + **PostGIS** (GiST indexes for radius/area search, trigram indexes for text search, `jsonb` routes) · photos in **S3** | consumes route publish events |
 | **Activity** | Recorded and imported hikes (segments, statistics, GPX export), **hike feed** (sharing, photos, likes, comments, track privacy), comment and hike photo moderation | Postgres + PostGIS (`multilinestring` per hike) · photos in S3 | publishes hike events; group membership read model |
 | **Trips** | Multi-day trips, days and overnight stops, attached route, checklists (personal and group items with claims), gear lists and packing suggestions, expenses and payments | Postgres · Redis (SignalR backplane) | group membership read model; live updates on `/hubs/trips`; publishes expense, payment and gear-reminder events (hourly job) |
-| **Groups** | Groups, invite codes, members, scheduled group hikes with RSVPs and meeting points, **live location** | Postgres · Redis (positions expire after 15 min; SignalR backplane) | publishes membership and group hike events; `/hubs/groups` |
+| **Groups** | Groups, invite codes, members, scheduled group hikes with RSVPs and meeting points, **live location** | Postgres · Redis (positions expire after 15 min; SignalR backplane) | publishes membership and group hike events; consumes profile renames; `/hubs/groups` |
 | **Routes** | Route editor and multi-day planner: snapping, elevation, walking time, POIs, place search, name suggestions, alternatives, itinerary planner, sharing with groups, publishing to Discover | Postgres · Redis (routing, POI and elevation cache) | Mapbox (Directions, Terrain-DEM, Search Box, Tilequery) with OSM fallbacks (Overpass, Photon, Open-Meteo elevation) |
 | **Weather** | Current conditions, 16-day forecasts adjusted to trail elevation, a hiking suitability rating per day | Redis cache only | Open-Meteo |
 | **Notifications** | Inbox items (likes batched per hike), push devices (Expo push tokens), push switches per category | Postgres | consumes feed, group and trip events; group membership read model; Expo Push API |
@@ -185,7 +185,8 @@ on the gateway). The backend serves 119 operations in all; `scripts/api-sweep.mj
 ```mermaid
 flowchart LR
     activity["Activity"] -- "ActivityCompleted<br/>ActivityDeleted" --> profile["Profile"]
-    groups["Groups"] -- "GroupMembersChanged" --> trips["Trips"]
+    profile -- "ProfileRenamed" --> groups["Groups"]
+    groups -- "GroupMembersChanged" --> trips["Trips"]
     groups -- "GroupMembersChanged" --> routes["Routes"]
     groups -- "GroupMembersChanged" --> activity
     groups -- "GroupMembersChanged<br/>GroupHikeScheduled" --> notifications["Notifications"]
@@ -198,7 +199,8 @@ flowchart LR
 |-------|--------------|-------------|-----|
 | `ActivityCompleted` | Activity, when a hike is recorded or imported | Profile | update totals, unlock achievements |
 | `ActivityDeleted` | Activity | Profile | take the hike back out of the totals |
-| `GroupMembersChanged` | Groups, on every membership change, and for every group when Groups starts | Trips, Routes, Activity, Notifications | replace their copy of the group's members; it decides who can see group trips, shared routes and feed posts. Notifications compares each snapshot with the previous one to tell members who joined |
+| `ProfileRenamed` | Profile, when a display name is set on first sign-in, made readable from an email, or edited | Groups | rename the member in each of their groups and republish those member lists, so every read model shows the new name |
+| `GroupMembersChanged` | Groups, on every membership change or member rename, and for every group when Groups starts | Trips, Routes, Activity, Notifications | replace their copy of the group's members; it decides who can see group trips, shared routes and feed posts. Notifications compares each snapshot with the previous one to tell members who joined |
 | `GroupHikeScheduled` | Groups (with the group name and who scheduled it) | Notifications | tell the other members |
 | `HikeLiked` / `HikeCommented` | Activity, on a new like (not a repeat) or comment | Notifications | tell the hike's owner; likes are batched into one item per hike, pushed at most every 10 minutes |
 | `HikeShared` | Activity, on the first share and for groups added later | Notifications | tell the members of the newly added groups |
@@ -261,7 +263,7 @@ mobile/
 | Unit tests (domain rules: trails, hikes, trips, groups, routing, planner, gear, feed, moderation; notification batching, preferences and the Expo sender) | `backend/tests/TrailHub.UnitTests` | `./build.sh 'dotnet test TrailHub.slnx'` |
 | Architecture tests (layering, dependencies, no nested types, controllers → services) | `backend/tests/TrailHub.ArchitectureTests` | same |
 | Smoke test: 52 checks through the gateway | `backend/scripts/smoke-test.sh` | stack in `AUTH_MODE=Development` |
-| Feature suites: SignalR, group trips, gear lists, trip expenses, notifications, hike feed, route sharing, moderation, content moderation | `backend/scripts/*-test.mjs` | `node scripts/<name>.mjs` |
+| Feature suites: SignalR, group trips, gear lists, trip expenses, notifications, readable names, hike feed, route sharing, moderation, content moderation | `backend/scripts/*-test.mjs` | `node scripts/<name>.mjs` |
 | API sweep: calls every endpoint (119 operations), checks statuses and error shapes, fails if one is skipped | `backend/scripts/api-sweep.mjs` | `node scripts/api-sweep.mjs` |
 | Mobile type check and lint | `mobile/` | `npx tsc --noEmit && npx expo lint` |
 

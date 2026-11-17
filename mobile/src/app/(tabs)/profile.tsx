@@ -75,7 +75,7 @@ export default function ProfileScreen() {
                 icon="checkmark"
                 disabled={!displayName.trim()}
                 loading={updateProfile.isPending}
-                onPress={() => updateProfile.mutate({ displayName, homeRegion: homeRegion || null, bio: p.bio }, { onSuccess: () => setEditing(false) })}
+                onPress={() => updateProfile.mutate({ displayName, homeRegion: homeRegion || null, bio: p.bio, avatarUrl: p.avatarUrl }, { onSuccess: () => setEditing(false) })}
               />
             </View>
           </View>

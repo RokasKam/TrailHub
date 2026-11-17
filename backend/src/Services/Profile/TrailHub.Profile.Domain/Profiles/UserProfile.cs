@@ -8,7 +8,7 @@ namespace TrailHub.Profile.Domain.Profiles;
 /// </summary>
 public sealed class UserProfile : AggregateRoot<Guid>
 {
-    public const int MaxDisplayNameLength = 80;
+    public const int MaxDisplayNameLength = DisplayNames.MaxLength;
     public const int MaxBioLength = 1000;
 
     private readonly List<RecordedHike> _hikes = [];
@@ -24,6 +24,12 @@ public sealed class UserProfile : AggregateRoot<Guid>
     public string DisplayName { get; private set; } = null!;
 
     public string? Email { get; private set; }
+
+    /// <summary>
+    /// Whether the person chose (or kept) their display name themselves. Until then it came from the identity provider,
+    /// and the app asks once what to call them.
+    /// </summary>
+    public bool NameConfirmed { get; private set; }
 
     public string? Bio { get; private set; }
 
@@ -51,7 +57,7 @@ public sealed class UserProfile : AggregateRoot<Guid>
         {
             Id = Guid.CreateVersion7(),
             UserId = userId,
-            DisplayName = NormalizeDisplayName(displayName),
+            DisplayName = DisplayNames.Friendly(displayName, email),
             Email = email,
             CreatedAtUtc = nowUtc,
         };
@@ -73,11 +79,28 @@ public sealed class UserProfile : AggregateRoot<Guid>
             return ProfileErrors.InvalidAvatarUrl;
         }
 
-        DisplayName = displayName.Trim();
+        // An email typed as a name is shown to groups, so it is made readable like the one from sign-up.
+        DisplayName = DisplayNames.Friendly(displayName);
+        NameConfirmed = true;
         Bio = string.IsNullOrWhiteSpace(bio) ? null : bio.Trim();
         HomeRegion = string.IsNullOrWhiteSpace(homeRegion) ? null : homeRegion.Trim();
         AvatarUrl = avatarUrl;
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Replaces a display name that is an email (profiles created before names were made readable) with a readable
+    /// one. Returns whether the name changed.
+    /// </summary>
+    public bool FixEmailDisplayName()
+    {
+        if (!DisplayNames.IsEmail(DisplayName))
+        {
+            return false;
+        }
+
+        DisplayName = DisplayNames.Friendly(DisplayName, Email);
+        return true;
     }
 
     public void UpdatePreferences(ProfilePreferences preferences) => Preferences = preferences;
@@ -102,10 +125,4 @@ public sealed class UserProfile : AggregateRoot<Guid>
 
     /// <summary>Removes a deleted hike from the totals. Achievements already earned are kept.</summary>
     public void RemoveHike(Guid activityId) => _hikes.RemoveAll(h => h.ActivityId == activityId);
-
-    private static string NormalizeDisplayName(string? name)
-    {
-        var trimmed = name?.Trim();
-        return string.IsNullOrEmpty(trimmed) ? "Hiker" : trimmed[..Math.Min(trimmed.Length, MaxDisplayNameLength)];
-    }
 }

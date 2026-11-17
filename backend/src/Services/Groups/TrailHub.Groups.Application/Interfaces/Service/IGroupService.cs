@@ -34,7 +34,13 @@ public interface IGroupService
     Task DeleteAsync(Guid groupId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Re-publishes every group's member list. Run at startup so services that keep a copy (Trips) catch up
+    /// Gives the user their new profile name in every group they're in and republishes those groups' member lists.
+    /// Driven by the Profile service's rename event, so it takes the user id instead of reading the caller.
+    /// </summary>
+    Task RenameMemberAsync(string userId, string displayName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Makes member names that are emails readable, then re-publishes every group's member list. Run at startup so services that keep a copy (Trips) catch up
     /// on groups created before they subscribed, or on events lost while they were down. Consumers ignore duplicates.
     /// </summary>
     Task RepublishMembersAsync(CancellationToken cancellationToken);

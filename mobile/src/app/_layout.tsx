@@ -9,6 +9,7 @@ import { Platform, useColorScheme } from 'react-native';
 
 import { SessionProvider, useSession } from '@/auth/session';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { NamePrompt } from '@/components/name-prompt';
 import { Colors } from '@/constants/theme';
 import { persistOptions, queryClient } from '@/lib/query-client';
 import { NotificationsBridge } from '@/notifications/bridge';
@@ -43,6 +44,7 @@ function RootStack() {
   return (
     <>
       {signedIn && <NotificationsBridge />}
+      {signedIn && <NamePrompt />}
       <Stack
         screenOptions={{
           headerBackButtonDisplayMode: 'minimal',

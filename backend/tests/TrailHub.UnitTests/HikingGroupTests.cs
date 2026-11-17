@@ -63,4 +63,31 @@ public sealed class HikingGroupTests
         Assert.Equal(GroupErrors.NotMember, group.ScheduleHike("stranger", "Sunrise", null, Now.AddDays(1), null, null, Now).Error);
         Assert.True(group.ScheduleHike("owner", "Sunrise", null, Now.AddDays(1), null, null, Now).IsSuccess);
     }
+
+    [Fact]
+    public void Renaming_a_member_changes_only_their_name_and_never_to_an_email()
+    {
+        var group = NewGroup();
+        group.Join("u2", "Bo", "ABCD2345", Now);
+
+        Assert.True(group.RenameMember("u2", "Bo Lind"));
+        Assert.False(group.RenameMember("u2", "Bo Lind"));
+        Assert.False(group.RenameMember("stranger", "Xena"));
+        Assert.True(group.RenameMember("owner", "olga.berg@x.io"));
+
+        Assert.Equal("Bo Lind", group.Members.Single(m => m.UserId == "u2").DisplayName);
+        Assert.Equal("Olga Berg", group.Members.Single(m => m.UserId == "owner").DisplayName);
+        Assert.Equal(2, group.Members.Count);
+    }
+
+    [Fact]
+    public void Email_member_names_are_made_readable()
+    {
+        var group = HikingGroup.Create("Weekenders", null, "owner", "rokaskamble39@gmail.com", "ABCD2345", Now).Value;
+        group.Join("u2", "Bo", "ABCD2345", Now);
+
+        Assert.True(group.FixEmailMemberNames());
+        Assert.False(group.FixEmailMemberNames());
+        Assert.Equal(["Rokaskamble", "Bo"], group.Members.Select(m => m.DisplayName));
+    }
 }

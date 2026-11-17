@@ -52,7 +52,7 @@ internal sealed class TripEditor(
 
     /// <summary>Who can take part in the trip's expenses, and names for everyone in its ledger.</summary>
     public TripPeople PeopleOf(Trip trip, GroupInfo? group, IEnumerable<TripExpense> tripExpenses, IEnumerable<TripPayment> tripPayments) =>
-        new(trip, group, user.UserId, user.Name, tripExpenses, tripPayments);
+        new(trip, group, user.UserId, DisplayNames.Friendly(user.Name, user.Email), tripExpenses, tripPayments);
 
     /// <summary>A change to the plan, which is the owner's.</summary>
     public Task<TripResponse> ChangePlanAsync(Guid tripId, Func<Trip, Result> apply, CancellationToken cancellationToken) =>

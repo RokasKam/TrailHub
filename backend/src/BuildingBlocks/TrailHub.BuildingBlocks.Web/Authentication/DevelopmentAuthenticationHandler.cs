@@ -8,7 +8,9 @@ namespace TrailHub.BuildingBlocks.Web.Authentication;
 
 /// <summary>
 /// Local-only authentication: <c>Authorization: Dev &lt;user-id&gt;</c> (or <c>?access_token=&lt;user-id&gt;</c>
-/// on hub connections) signs the request in as that user. Never enabled outside Development.
+/// on hub connections) signs the request in as that user. Its <c>name</c> claim is the user id, or the optional
+/// <c>X-Dev-Name</c> header; the optional <c>X-Dev-Email</c> header adds an <c>email</c> claim (like an Auth0
+/// email/password user, whose name is their email). Never enabled outside Development.
 /// </summary>
 internal sealed class DevelopmentAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -18,6 +20,8 @@ internal sealed class DevelopmentAuthenticationHandler(
 {
     public const string SchemeName = "Development";
     private const string Prefix = "Dev ";
+    private const string NameHeader = "X-Dev-Name";
+    private const string EmailHeader = "X-Dev-Email";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -43,8 +47,16 @@ internal sealed class DevelopmentAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
+        var name = Request.Headers[NameHeader].ToString().Trim();
+        var email = Request.Headers[EmailHeader].ToString().Trim();
+        List<Claim> claims = [new("sub", userId), new("name", name.Length > 0 ? name : userId)];
+        if (email.Length > 0)
+        {
+            claims.Add(new Claim("email", email));
+        }
+
         var identity = new ClaimsIdentity(
-            [new Claim("sub", userId), new Claim("name", userId)],
+            claims,
             SchemeName,
             nameType: "sub",
             roleType: "role");

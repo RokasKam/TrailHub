@@ -217,6 +217,8 @@ export type Profile = {
   id: string;
   userId: string;
   displayName: string;
+  /** False until the person chooses or keeps their name; the app asks once what to call them. */
+  nameConfirmed: boolean;
   email: string | null;
   bio: string | null;
   homeRegion: string | null;
